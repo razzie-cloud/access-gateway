@@ -17,12 +17,11 @@ services:
     build:
       context: .
     environment:
-      DATABASE_URL: postgres://app:app@db:5432/app?sslmode=disable
+      POSTGRES_URI: postgres://app:app@db:5432/app?sslmode=disable
       ORIGIN: http://localhost:8080
       RP_ID: localhost
       RP_NAME: Minimal WebAuthn
-      LISTEN_ADDR: :8080
-    command: ["sh", "-c", "go mod tidy && go run ./cmd/server"]
+      SERVICE_PORT: "8080"
     ports:
       - "8080:8080"
     depends_on:

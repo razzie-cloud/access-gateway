@@ -3,6 +3,7 @@ module github.com/razzie-cloud/access-gateway
 go 1.27
 
 require (
+	github.com/alexflint/go-arg v1.6.0
 	github.com/go-rel/postgres v0.12.0
 	github.com/go-rel/rel v0.42.0
 	github.com/go-webauthn/webauthn v0.12.0
@@ -12,6 +13,7 @@ require (
 )
 
 require (
+	github.com/alexflint/go-scalar v1.2.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
 	github.com/go-rel/sql v0.17.0 // indirect
 	github.com/go-webauthn/x v0.1.17 // indirect
