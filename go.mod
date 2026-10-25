@@ -1,6 +1,6 @@
 module github.com/razzie-cloud/access-gateway
 
-go 1.25
+go 1.27
 
 require (
 	github.com/go-rel/postgres v0.12.0
