@@ -6,8 +6,10 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func prepareConfig(t *testing.T, args ...string) {
@@ -21,9 +23,7 @@ func prepareConfig(t *testing.T, args ...string) {
 		"REDIS_URI", "REDIS_URI_FROM", "REDIS_PASSWORD_FILE",
 	} {
 		t.Setenv(key, "")
-		if err := os.Unsetenv(key); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, os.Unsetenv(key))
 	}
 }
 
@@ -31,13 +31,12 @@ func TestLoadDefaults(t *testing.T) {
 	prepareConfig(t)
 	t.Setenv("POSTGRES_URI", "postgres://user:pass@localhost/gateway")
 	cfg, err := Load()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cfg.ServicePort != 8080 || cfg.Origin != "http://localhost:8080" ||
-		cfg.RPID != "localhost" || cfg.RPName != "Minimal WebAuthn" {
-		t.Fatalf("unexpected defaults: %+v", cfg)
-	}
+	require.NoError(t, err)
+	require.NotNil(t, cfg)
+	assert.Equal(t, 8080, cfg.ServicePort)
+	assert.Equal(t, "http://localhost:8080", cfg.Origin)
+	assert.Equal(t, "localhost", cfg.RPID)
+	assert.Equal(t, "Minimal WebAuthn", cfg.RPName)
 }
 
 func TestLoadGatewaySettings(t *testing.T) {
@@ -61,13 +60,13 @@ func TestLoadGatewaySettings(t *testing.T) {
 				}
 			}
 			cfg, err := Load()
-			if err != nil {
-				t.Fatal(err)
-			}
-			if cfg.ServicePort != 9090 || cfg.PostgresURI != values[1].value ||
-				cfg.Origin != values[2].value || cfg.RPID != values[3].value || cfg.RPName != values[4].value {
-				t.Fatalf("unexpected gateway settings: %+v", cfg)
-			}
+			require.NoError(t, err)
+			require.NotNil(t, cfg)
+			assert.Equal(t, 9090, cfg.ServicePort)
+			assert.Equal(t, values[1].value, cfg.PostgresURI)
+			assert.Equal(t, values[2].value, cfg.Origin)
+			assert.Equal(t, values[3].value, cfg.RPID)
+			assert.Equal(t, values[4].value, cfg.RPName)
 		})
 	}
 }
@@ -90,27 +89,19 @@ func TestLoadBrokerURIsAndPasswordFiles(t *testing.T) {
 	t.Setenv("POSTGRES_URI_FROM", broker.URL+"/v1/instances/postgres/gateway/uri")
 	t.Setenv("REDIS_URI_FROM", broker.URL+"/v1/instances/redis/gateway/uri")
 	passwordFile := filepath.Join(t.TempDir(), "password")
-	if err := os.WriteFile(passwordFile, []byte("p@ss:word"), 0600); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.WriteFile(passwordFile, []byte("p@ss:word"), 0600))
 	t.Setenv("POSTGRES_PASSWORD_FILE", passwordFile)
 	t.Setenv("REDIS_PASSWORD_FILE", passwordFile)
 	cfg, err := Load()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cfg.PostgresURI != "postgres://pguser:p%40ss%3Aword@db/gateway?sslmode=disable" {
-		t.Fatalf("unexpected Postgres URI: %s", cfg.PostgresURI)
-	}
-	if cfg.RedisURI != "redis://redisuser:p%40ss%3Aword@redis:6379/0" {
-		t.Fatalf("unexpected Redis URI: %s", cfg.RedisURI)
-	}
+	require.NoError(t, err)
+	require.NotNil(t, cfg)
+	assert.Equal(t, "postgres://pguser:p%40ss%3Aword@db/gateway?sslmode=disable", cfg.PostgresURI)
+	assert.Equal(t, "redis://redisuser:p%40ss%3Aword@redis:6379/0", cfg.RedisURI)
 }
 
 func TestLoadRequiresPostgresURI(t *testing.T) {
 	prepareConfig(t)
 	cfg, err := Load()
-	if cfg != nil || err == nil || !strings.Contains(err.Error(), "Postgres URI is required") {
-		t.Fatalf("expected missing Postgres URI error, got config=%+v, err=%v", cfg, err)
-	}
+	assert.Nil(t, cfg)
+	assert.ErrorContains(t, err, "Postgres URI is required")
 }
