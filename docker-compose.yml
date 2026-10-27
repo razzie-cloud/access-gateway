@@ -16,6 +16,7 @@ services:
   app:
     build:
       context: .
+      network: host
     environment:
       POSTGRES_URI: postgres://app:app@db:5432/app?sslmode=disable
       ORIGIN: http://localhost:8080
