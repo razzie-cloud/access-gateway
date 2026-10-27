@@ -1,0 +1,5 @@
+main { max-width: 52rem; }
+header nav a { text-decoration: none; }
+.qr { display: block; max-width: 100%; height: auto; background: white; }
+#status:empty { display: none; }
+small { display: block; margin-bottom: 1rem; }

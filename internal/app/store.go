@@ -11,7 +11,6 @@ import (
 	"github.com/go-rel/rel"
 	"github.com/go-rel/rel/where"
 	"github.com/go-webauthn/webauthn/webauthn"
-	"github.com/google/uuid"
 )
 
 func (s *Server) countUsers(ctx context.Context) (int, error) {
@@ -56,19 +55,6 @@ func (s *Server) validateBootstrapToken(ctx context.Context, token string) error
 		return errors.New("invalid bootstrap token")
 	}
 	return nil
-}
-
-func (s *Server) createFirstUser(ctx context.Context, username string) (User, error) {
-	id := uuid.New()
-	u := User{
-		ID:        id[:],
-		Username:  username,
-		CreatedAt: time.Now().Unix(),
-	}
-	if err := s.repo.Insert(ctx, &u); err != nil {
-		return User{}, err
-	}
-	return u, nil
 }
 
 func (s *Server) getUserByUsername(ctx context.Context, username string) (User, error) {

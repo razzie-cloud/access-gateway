@@ -9,6 +9,7 @@ import (
 type User struct {
 	ID        []byte `db:",primary"`
 	Username  string
+	IsAdmin   bool
 	CreatedAt int64
 }
 

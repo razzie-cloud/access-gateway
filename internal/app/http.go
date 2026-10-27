@@ -14,12 +14,19 @@ import (
 
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
+	"github.com/google/uuid"
 
 	"github.com/razzie-cloud/access-gateway/internal/web"
 )
 
 func (s *Server) routes() {
-	s.mux.HandleFunc("/", http.FileServer(http.FS(web.Assets)).ServeHTTP)
+	s.mux.Handle("/static/", http.FileServer(http.FS(web.Assets)))
+	s.mux.HandleFunc("/", s.handlePage)
+	s.mux.HandleFunc("/register", s.handlePage)
+	s.mux.HandleFunc("/ui/state", s.handleState)
+	s.mux.HandleFunc("/ui/users", s.handleCreateUser)
+	s.mux.HandleFunc("/ui/links", s.handleCreateLink)
+	s.mux.HandleFunc("/ui/logout", s.handleUILogout)
 	s.mux.HandleFunc("/api/bootstrap", s.handleBootstrap)
 	s.mux.HandleFunc("/api/register/begin", s.handleRegisterBegin)
 	s.mux.HandleFunc("/api/register/finish", s.handleRegisterFinish)
@@ -28,14 +35,6 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/me", s.handleMe)
 	s.mux.HandleFunc("/api/logout", s.handleLogout)
 }
-
-/*func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/" {
-		http.NotFound(w, r)
-		return
-	}
-	http.ServeFile(w, r, "web/index.html")
-}*/
 
 func writeJSON(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json")
@@ -67,86 +66,81 @@ func (s *Server) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 }
 
 type registerBeginReq struct {
-	Username string `json:"username"`
-	Token    string `json:"token"`
+	Username  string `json:"username"`
+	Token     string `json:"token"`
+	LinkToken string `json:"linkToken"`
 }
 
 func (s *Server) handleRegisterBegin(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
+		w.WriteHeader(405)
 		return
 	}
-
 	var req registerBeginReq
 	if err := readJSON(r, &req); err != nil {
 		writeJSON(w, 400, map[string]string{"error": "bad json"})
 		return
 	}
-	req.Username = strings.TrimSpace(req.Username)
-	if req.Username == "" || len(req.Username) > 64 {
-		writeJSON(w, 400, map[string]string{"error": "invalid username"})
-		return
-	}
-	if req.Token == "" {
-		writeJSON(w, 400, map[string]string{"error": "missing token"})
-		return
-	}
-
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
-
-	n, err := s.countUsers(ctx)
+	var registration registrationContext
+	var err error
+	if req.LinkToken != "" {
+		// A link always determines the account; never accept a username override.
+		if req.Username != "" || req.Token != "" {
+			writeJSON(w, 400, map[string]string{"error": "ambiguous registration"})
+			return
+		}
+		registration, err = s.registrationFromLink(ctx, req.LinkToken)
+	} else {
+		req.Username = strings.TrimSpace(req.Username)
+		if !validUsername(req.Username) || req.Token == "" {
+			writeJSON(w, 400, map[string]string{"error": "username and bootstrap token required"})
+			return
+		}
+		n, countErr := s.countUsers(ctx)
+		if countErr != nil {
+			writeJSON(w, 500, map[string]string{"error": "db error"})
+			return
+		}
+		if n > 0 {
+			writeJSON(w, 409, map[string]string{"error": "registration closed"})
+			return
+		}
+		err = s.validateBootstrapToken(ctx, req.Token)
+		id := uuid.New()
+		registration = registrationContext{User: User{ID: id[:], Username: req.Username, IsAdmin: true}, BootstrapHash: hashToken(req.Token)}
+	}
 	if err != nil {
-		writeJSON(w, 500, map[string]string{"error": "db error"})
+		writeJSON(w, 403, map[string]string{"error": "invalid, expired or used registration token"})
 		return
 	}
-	if n > 0 {
-		writeJSON(w, 409, map[string]string{"error": "registration closed"})
-		return
+	waUser := WebAuthnUser{User: registration.User}
+	if registration.LinkHash != "" {
+		waUser, err = s.loadWebAuthnUser(ctx, registration.User)
+		if err != nil {
+			writeJSON(w, 500, map[string]string{"error": "db error"})
+			return
+		}
 	}
-
-	if err := s.validateBootstrapToken(ctx, req.Token); err != nil {
-		writeJSON(w, 403, map[string]string{"error": "invalid token"})
-		return
+	exclusions := make([]protocol.CredentialDescriptor, 0, len(waUser.Creds))
+	for _, credential := range waUser.Creds {
+		exclusions = append(exclusions, credential.Descriptor())
 	}
-
-	u, err := s.createFirstUser(ctx, req.Username)
-	if err != nil {
-		writeJSON(w, 500, map[string]string{"error": "failed to create user"})
-		return
-	}
-
-	waUser, err := s.loadWebAuthnUser(ctx, u)
-	if err != nil {
-		writeJSON(w, 500, map[string]string{"error": "db error"})
-		return
-	}
-
-	opts, sessionData, err := s.wa.BeginRegistration(
-		waUser,
-		//webauthn.WithUserVerification(webauthn.UserVerificationPreferred),
-	)
+	opts, sd, err := s.wa.BeginRegistration(waUser, webauthn.WithExclusions(exclusions))
 	if err != nil {
 		writeJSON(w, 500, map[string]string{"error": "webauthn error"})
 		return
 	}
-
 	sid := s.mem.NewSID()
-	s.mem.PutRegistration(sid, req.Username, *sessionData)
-	http.SetCookie(w, &http.Cookie{
-		Name:     "sid",
-		Value:    sid,
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-	})
-
+	s.mem.PutRegistration(sid, registration, *sd)
+	s.setCookie(w, "sid", sid, 0)
 	writeJSON(w, 200, opts)
 }
 
 func (s *Server) handleRegisterFinish(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
+		w.WriteHeader(405)
 		return
 	}
 	sid, err := r.Cookie("sid")
@@ -154,42 +148,36 @@ func (s *Server) handleRegisterFinish(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]string{"error": "missing sid"})
 		return
 	}
-
-	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
-	defer cancel()
-
-	username, sd, ok := s.mem.GetRegistration(sid.Value)
+	registration, sd, ok := s.mem.GetRegistration(sid.Value)
 	if !ok {
 		writeJSON(w, 400, map[string]string{"error": "registration session expired"})
 		return
 	}
-
-	u, err := s.getUserByUsername(ctx, username)
-	if err != nil {
-		writeJSON(w, 400, map[string]string{"error": "unknown user"})
-		return
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+	waUser := WebAuthnUser{User: registration.User}
+	if registration.LinkHash != "" {
+		waUser, err = s.loadWebAuthnUser(ctx, registration.User)
+		if err != nil {
+			writeJSON(w, 500, map[string]string{"error": "db error"})
+			return
+		}
 	}
-	waUser, err := s.loadWebAuthnUser(ctx, u)
-	if err != nil {
-		writeJSON(w, 500, map[string]string{"error": "db error"})
-		return
-	}
-
-	cred, err := s.wa.FinishRegistration(waUser, sd, r)
+	credential, err := s.wa.FinishRegistration(waUser, sd, r)
 	if err != nil {
 		writeJSON(w, 400, map[string]string{"error": "webauthn finish failed"})
 		return
 	}
-
-	if err := s.upsertCredential(ctx, u.ID, cred); err != nil {
-		writeJSON(w, 500, map[string]string{"error": "failed to store credential"})
+	if err := s.completeRegistration(ctx, registration, credential); err != nil {
+		if errors.Is(err, errRegistrationUnavailable) {
+			writeJSON(w, 409, map[string]string{"error": "registration link expired, used, or bootstrap already completed"})
+		} else {
+			writeJSON(w, 500, map[string]string{"error": "failed to store credential"})
+		}
 		return
 	}
-
-	_ = s.clearAppState(ctx, "bootstrap_token_sha256")
 	s.mem.DeleteSID(sid.Value)
-	http.SetCookie(w, &http.Cookie{Name: "sid", Value: "", Path: "/", MaxAge: -1})
-
+	s.setCookie(w, "sid", "", -1)
 	writeJSON(w, 200, map[string]any{"ok": true})
 }
 
@@ -245,13 +233,7 @@ func (s *Server) handleLoginBegin(w http.ResponseWriter, r *http.Request) {
 
 	sid := s.mem.NewSID()
 	s.mem.PutLogin(sid, req.Username, *sessionData)
-	http.SetCookie(w, &http.Cookie{
-		Name:     "sid",
-		Value:    sid,
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-	})
+	s.setCookie(w, "sid", sid, 0)
 
 	writeJSON(w, 200, opts)
 }
@@ -303,16 +285,10 @@ func (s *Server) handleLoginFinish(w http.ResponseWriter, r *http.Request) {
 	authHex := hex.EncodeToString(auth)
 	s.mem.PutAuth(authHex, username)
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     "auth",
-		Value:    authHex,
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-	})
+	s.setCookie(w, "auth", authHex, 0)
 
 	s.mem.DeleteSID(sid.Value)
-	http.SetCookie(w, &http.Cookie{Name: "sid", Value: "", Path: "/", MaxAge: -1})
+	s.setCookie(w, "sid", "", -1)
 
 	writeJSON(w, 200, map[string]any{"ok": true})
 }
@@ -340,6 +316,6 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	if err == nil && c.Value != "" {
 		s.mem.DeleteAuth(c.Value)
 	}
-	http.SetCookie(w, &http.Cookie{Name: "auth", Value: "", Path: "/", MaxAge: -1})
+	s.setCookie(w, "auth", "", -1)
 	writeJSON(w, 200, map[string]any{"ok": true})
 }

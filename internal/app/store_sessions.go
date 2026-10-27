@@ -20,9 +20,9 @@ type MemorySessions struct {
 }
 
 type regEntry struct {
-	username string
-	sd       webauthn.SessionData
-	exp      time.Time
+	registration registrationContext
+	sd           webauthn.SessionData
+	exp          time.Time
 }
 
 type loginEntry struct {
@@ -51,21 +51,21 @@ func (m *MemorySessions) NewSID() string {
 	return hex.EncodeToString(b)
 }
 
-func (m *MemorySessions) PutRegistration(sid, username string, sd webauthn.SessionData) {
+func (m *MemorySessions) PutRegistration(sid string, registration registrationContext, sd webauthn.SessionData) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.reg[sid] = regEntry{username: username, sd: sd, exp: time.Now().Add(m.ttl)}
+	m.reg[sid] = regEntry{registration: registration, sd: sd, exp: time.Now().Add(m.ttl)}
 }
 
-func (m *MemorySessions) GetRegistration(sid string) (string, webauthn.SessionData, bool) {
+func (m *MemorySessions) GetRegistration(sid string) (registrationContext, webauthn.SessionData, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	e, ok := m.reg[sid]
 	if !ok || time.Now().After(e.exp) {
 		delete(m.reg, sid)
-		return "", webauthn.SessionData{}, false
+		return registrationContext{}, webauthn.SessionData{}, false
 	}
-	return e.username, e.sd, true
+	return e.registration, e.sd, true
 }
 
 func (m *MemorySessions) PutLogin(sid, username string, sd webauthn.SessionData) {

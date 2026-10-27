@@ -1,0 +1,99 @@
+{{define "page"}}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="htmx-config" content='{"allowEval":false,"includeIndicatorStyles":false,"selfRequestsOnly":true,"historyCacheSize":0}'>
+  <title>Access Gateway</title>
+  <link rel="stylesheet" href="/static/pico.min.css">
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/htmx.min.js" defer></script>
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <header class="container"><nav><ul><li><strong><a href="/">Access Gateway</a></strong></li></ul><ul><li>Passkey access</li></ul></nav></header>
+  <main class="container">
+    <p id="status" role="status" aria-live="polite"></p>
+    {{if .Invite}}
+    <section id="content">
+      <article>
+        <h1>Register this device</h1>
+        <p>Use your registration link to add a passkey to the account it was issued for.</p>
+        <form data-webauthn="register" id="device-registration">
+          <input type="hidden" name="linkToken" id="link-token">
+          <button type="submit">Create passkey on this device</button>
+        </form>
+        <p>Each link works once. If it has expired or was already used, ask for a new one.</p>
+      </article>
+    </section>
+    {{else}}
+    <section id="content" hx-get="/ui/state" hx-trigger="reloadState from:body" hx-swap="innerHTML">{{template "state" .}}</section>
+    {{end}}
+  </main>
+</body>
+</html>{{end}}
+
+{{define "state"}}
+{{if .Message}}{{template "message" .}}{{end}}
+{{if .User}}
+<article>
+  <h1>Your account</h1>
+  <p>Signed in as <strong>{{.User.Username}}</strong>{{if .User.IsAdmin}} · Administrator{{end}}.</p>
+  <form hx-post="/ui/logout" hx-target="#content"><button class="secondary" type="submit">Sign out</button></form>
+</article>
+<article>
+  <h2>Device registration links</h2>
+  <p>Create a link, then open it or scan its QR code on the device you want to register.</p>
+  <form hx-post="/ui/links" hx-target="#link-result" hx-disabled-elt="find button">
+    {{if .User.IsAdmin}}<label for="link-account">Account</label><select id="link-account" name="username">{{range .Users}}<option value="{{.Username}}"{{if eq .Username $.User.Username}} selected{{end}}>{{.Username}}</option>{{end}}</select>{{end}}
+    <label>Expires after (minutes)<input type="number" name="minutes" min="1" max="43200" value="60" required></label>
+    <small>Choose 1 minute to 30 days (43200 minutes). Each link registers one passkey.</small>
+    <button type="submit">Generate link and QR code</button>
+  </form>
+  <div id="link-result" aria-live="polite"></div>
+</article>
+{{if .User.IsAdmin}}
+<article>
+  <h2>Create a user</h2>
+  <p>New users can sign in after registering their first device through a link you generate for them.</p>
+  <form hx-post="/ui/users" hx-target="#user-result" hx-disabled-elt="find button">
+    <label>Username<input name="username" maxlength="64" autocomplete="off" required></label>
+    <button type="submit">Create user</button>
+  </form>
+  <div id="user-result" aria-live="polite"></div>
+</article>
+{{end}}
+{{else if .NeedsRegistration}}
+<article>
+  <h1>Set up your administrator</h1>
+  <p>Enter the bootstrap token from the gateway logs and create your first passkey.</p>
+  <form data-webauthn="register">
+    <label>Username<input name="username" maxlength="64" autocomplete="username" required></label>
+    <label>Bootstrap token<input name="token" type="password" autocomplete="off" required></label>
+    <button type="submit">Create administrator passkey</button>
+  </form>
+</article>
+{{else}}
+<article>
+  <h1>Sign in</h1>
+  <form data-webauthn="login">
+    <label>Username<input name="username" autocomplete="username" required></label>
+    <button type="submit">Sign in with a passkey</button>
+  </form>
+  <p>New device? Open the registration link you received, or sign in on an existing device to generate one.</p>
+</article>
+{{end}}
+{{end}}
+
+{{define "message"}}<p role="status">{{if .Error}}{{.Error}}{{else}}{{.Message}}{{end}}</p>{{end}}
+
+{{define "link"}}
+<hr>
+<h3>Register a device for {{.User.Username}}</h3>
+<label>Registration link<input readonly value="{{.Link}}" aria-label="Registration link"></label>
+<p><a href="{{.Link}}">Open registration link</a></p>
+<img class="qr" src="{{.QR}}" width="320" height="320" alt="QR code for the device registration link">
+<p><a href="{{.QR}}" download="device-registration.png">Download QR code</a></p>
+<p>Expires {{.Expires}}. This link can be used once.</p>
+<small>Anyone with this link can add a passkey to this account. Share it privately. Generate a separate link for each device.</small>
+{{end}}

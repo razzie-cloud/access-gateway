@@ -31,6 +31,7 @@ type Config struct {
 type Server struct {
 	cfg Config
 
+	db   *sql.DB
 	repo rel.Repository
 	wa   *webauthn.WebAuthn
 
@@ -66,6 +67,7 @@ func NewServer(cfg Config) (*Server, error) {
 
 	s := &Server{
 		cfg:  cfg,
+		db:   sqlDB,
 		repo: repo,
 		wa:   wa,
 		mem:  NewMemorySessions(30 * time.Minute),
@@ -81,7 +83,7 @@ func NewServer(cfg Config) (*Server, error) {
 }
 
 func (s *Server) ListenAndServe() error {
-	return http.ListenAndServe(s.cfg.ListenAddr, s.mux)
+	return http.ListenAndServe(s.cfg.ListenAddr, s.handler())
 }
 
 func (s *Server) ensureBootstrapTokenIfNoUsers(ctx context.Context) error {
