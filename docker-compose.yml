@@ -1,4 +1,18 @@
+volumes:
+  redis_data:
+
 services:
+  redis:
+    image: redis:8-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
   db:
     image: postgres:18-alpine
     environment:
@@ -19,6 +33,7 @@ services:
       network: host
     environment:
       POSTGRES_URI: postgres://app:app@db:5432/app?sslmode=disable
+      REDIS_URI: redis://redis:6379/0
       ORIGIN: http://localhost:8080
       RP_ID: localhost
       RP_NAME: Minimal WebAuthn
@@ -27,4 +42,6 @@ services:
       - "8080:8080"
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy

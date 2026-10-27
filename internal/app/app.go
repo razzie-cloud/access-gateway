@@ -22,10 +22,14 @@ import (
 type Config struct {
 	ListenAddr  string
 	DatabaseURL string
+	RedisURL    string
 
 	Origin string
 	RPID   string
 	RPName string
+
+	// Exact public app origins permitted to use forward authentication.
+	ForwardAuthOrigins []string
 }
 
 type Server struct {
@@ -35,16 +39,31 @@ type Server struct {
 	repo rel.Repository
 	wa   *webauthn.WebAuthn
 
-	mem *MemorySessions
+	sessions sessionStore
 
 	mux *http.ServeMux
 }
 
 func NewServer(cfg Config) (*Server, error) {
-	sqlDB, err := sql.Open("pgx", cfg.DatabaseURL)
+	if err := validateForwardAuthConfig(cfg); err != nil {
+		return nil, err
+	}
+	sessions, err := newRedisSessions(cfg.RedisURL, cfg.Origin)
 	if err != nil {
 		return nil, err
 	}
+	sqlDB, err := sql.Open("pgx", cfg.DatabaseURL)
+	if err != nil {
+		_ = sessions.Close()
+		return nil, err
+	}
+	initialized := false
+	defer func() {
+		if !initialized {
+			_ = sessions.Close()
+			_ = sqlDB.Close()
+		}
+	}()
 
 	if err := db.RunMigrations(sqlDB); err != nil {
 		return nil, err
@@ -66,12 +85,12 @@ func NewServer(cfg Config) (*Server, error) {
 	}
 
 	s := &Server{
-		cfg:  cfg,
-		db:   sqlDB,
-		repo: repo,
-		wa:   wa,
-		mem:  NewMemorySessions(30 * time.Minute),
-		mux:  http.NewServeMux(),
+		cfg:      cfg,
+		db:       sqlDB,
+		repo:     repo,
+		wa:       wa,
+		sessions: sessions,
+		mux:      http.NewServeMux(),
 	}
 	s.routes()
 
@@ -79,7 +98,12 @@ func NewServer(cfg Config) (*Server, error) {
 		return nil, err
 	}
 
+	initialized = true
 	return s, nil
+}
+
+func (s *Server) Close() error {
+	return errors.Join(s.sessions.Close(), s.db.Close())
 }
 
 func (s *Server) ListenAndServe() error {

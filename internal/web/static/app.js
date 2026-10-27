@@ -50,6 +50,10 @@ document.addEventListener("submit", async (event) => {
       response.userHandle = credential.response.userHandle ? encode(credential.response.userHandle) : null;
     }
     await api(`/api/${mode}/finish`, { id: credential.id, rawId: encode(credential.rawId), type: credential.type, response, clientExtensionResults: credential.getClientExtensionResults() });
+    if (mode === "login" && location.pathname === "/auth/authorize") {
+      location.reload();
+      return;
+    }
     if (tokenInput) {
       tokenInput.value = "";
       location.replace("/");
@@ -63,7 +67,7 @@ document.addEventListener("submit", async (event) => {
 
 // Display server-rendered validation and authorization errors in the form's target.
 document.addEventListener("htmx:beforeSwap", (event) => {
-  if ([400, 401, 403, 404, 409].includes(event.detail.xhr.status)) {
+  if ([400, 401, 403, 404, 409, 503].includes(event.detail.xhr.status)) {
     event.detail.shouldSwap = true;
     event.detail.isError = false;
   }

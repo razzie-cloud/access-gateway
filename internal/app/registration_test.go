@@ -56,7 +56,7 @@ func TestLinkLifetime(t *testing.T) {
 }
 
 func TestOriginAndAuthorization(t *testing.T) {
-	s := &Server{cfg: Config{Origin: "https://auth.example"}, mem: NewMemorySessions(time.Minute), mux: http.NewServeMux()}
+	s := &Server{cfg: Config{Origin: "https://auth.example"}, sessions: memorySessionStore{NewMemorySessions(time.Minute)}, mux: http.NewServeMux()}
 	s.routes()
 	for _, path := range []string{"/ui/users", "/ui/links"} {
 		w := request(s, "POST", path, "username=other&minutes=60", "")
@@ -82,12 +82,12 @@ func TestOriginAndAuthorization(t *testing.T) {
 	cookie := cookies[0]
 	assert.True(t, cookie.Secure)
 	assert.True(t, cookie.HttpOnly)
-	assert.Equal(t, http.SameSiteStrictMode, cookie.SameSite)
+	assert.Equal(t, http.SameSiteLaxMode, cookie.SameSite)
 	w = request(s, "GET", "/register", "", "")
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Contains(t, w.Body.String(), "/static/htmx.min.js")
 	assert.Contains(t, w.Body.String(), "/static/pico.min.css")
-	w = request(s, "GET", "/forward_auth", "", "")
+	w = request(s, "GET", "/missing", "", "")
 	assert.Equal(t, http.StatusNotFound, w.Code, "unknown paths must not serve account page")
 }
 
@@ -109,8 +109,11 @@ func postgresServer(t *testing.T) *Server {
 	query := uri.Query()
 	query.Set("search_path", schema)
 	uri.RawQuery = query.Encode()
-	s, err := NewServer(Config{DatabaseURL: uri.String(), Origin: "https://auth.example", RPID: "auth.example", RPName: "Test"})
+	redisStore := testRedisSessions(t, "")
+	s, err := NewServer(Config{DatabaseURL: uri.String(), RedisURL: os.Getenv("TEST_REDIS_URL"), Origin: "https://auth.example", RPID: "auth.example", RPName: "Test"})
 	require.NoError(t, err)
+	require.NoError(t, s.sessions.Close())
+	s.sessions = redisStore
 	t.Cleanup(func() { _ = s.db.Close() })
 	return s
 }
@@ -121,7 +124,7 @@ func addUser(t *testing.T, s *Server, username string, admin bool) User {
 	u := User{ID: id[:], Username: username, IsAdmin: admin}
 	_, err := s.db.Exec(`INSERT INTO users(id,username,is_admin,created_at) VALUES($1,$2,$3,0)`, u.ID, u.Username, u.IsAdmin)
 	require.NoError(t, err)
-	s.mem.PutAuth(username+"-session", username)
+	require.NoError(t, s.sessions.PutAuth(t.Context(), username+"-session", username))
 	return u
 }
 
@@ -239,7 +242,8 @@ func TestPostgresSingleUseExpiryAndRollback(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	cookies := w.Result().Cookies()
 	require.NotEmpty(t, cookies)
-	pending, _, ok := s.mem.GetRegistration(cookies[0].Value)
+	pending, _, ok, err := s.sessions.GetRegistration(t.Context(), cookies[0].Value)
+	require.NoError(t, err)
 	require.True(t, ok, "missing ceremony")
 	_, err = s.db.Exec(`UPDATE registration_links SET expires_at=$1 WHERE token_hash=$2`, time.Now().Unix()-1, hashToken(token))
 	require.NoError(t, err)
@@ -260,7 +264,8 @@ func TestPostgresBootstrapRetryAndRace(t *testing.T) {
 		require.Equal(t, http.StatusOK, w.Code, "bootstrap begin: %s", w.Body.String())
 		cookies := w.Result().Cookies()
 		require.NotEmpty(t, cookies)
-		registration, _, ok := s.mem.GetRegistration(cookies[0].Value)
+		registration, _, ok, err := s.sessions.GetRegistration(t.Context(), cookies[0].Value)
+		require.NoError(t, err)
 		require.True(t, ok, "missing session")
 		registrations = append(registrations, registration)
 	}

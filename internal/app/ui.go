@@ -119,6 +119,10 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	user, err := s.currentUser(r)
 	if err != nil {
+		if errors.Is(err, errSessionStore) {
+			render(w, 503, "message", viewData{Error: "Session storage unavailable"})
+			return
+		}
 		render(w, 401, "message", viewData{Error: "Sign in first"})
 		return
 	}
@@ -164,6 +168,10 @@ func (s *Server) handleCreateLink(w http.ResponseWriter, r *http.Request) {
 	}
 	actor, err := s.currentUser(r)
 	if err != nil {
+		if errors.Is(err, errSessionStore) {
+			render(w, 503, "message", viewData{Error: "Session storage unavailable"})
+			return
+		}
 		render(w, 401, "message", viewData{Error: "Sign in first"})
 		return
 	}
@@ -221,7 +229,10 @@ func (s *Server) handleUILogout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if cookie, err := r.Cookie("auth"); err == nil {
-		s.mem.DeleteAuth(cookie.Value)
+		if err := s.sessions.DeleteAuth(r.Context(), cookie.Value); err != nil {
+			render(w, 503, "message", viewData{Error: "Unable to sign out; try again"})
+			return
+		}
 	}
 	s.setCookie(w, "auth", "", -1)
 	s.handleStateAfterLogout(w, r)

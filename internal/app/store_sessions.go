@@ -1,116 +1,49 @@
 package app
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"sync"
+	"errors"
 	"time"
 
 	"github.com/go-webauthn/webauthn/webauthn"
 )
 
-type MemorySessions struct {
-	mu sync.Mutex
+const (
+	ceremonyTTL      = 30 * time.Minute
+	authTTL          = 7 * 24 * time.Hour
+	appLoginTTL      = 10 * time.Minute
+	appCodeTTL       = time.Minute
+	maxAppLoginFlows = 4096
+)
 
-	ttl time.Duration
+var errSessionStore = errors.New("session storage unavailable")
 
-	reg  map[string]regEntry
-	log  map[string]loginEntry
-	auth map[string]authEntry
+type sessionStore interface {
+	PutRegistration(context.Context, string, registrationContext, webauthn.SessionData) error
+	GetRegistration(context.Context, string) (registrationContext, webauthn.SessionData, bool, error)
+	PutLogin(context.Context, string, string, webauthn.SessionData) error
+	GetLogin(context.Context, string) (string, webauthn.SessionData, bool, error)
+	PutAuth(context.Context, string, string) error
+	GetAuth(context.Context, string) (string, bool, error)
+	CompleteLogin(context.Context, string, string, string) (bool, error)
+	DeleteAuth(context.Context, string) error
+	DeleteSID(context.Context, string) error
+	beginAppLogin(context.Context, string, string) (string, string, error)
+	appLogin(context.Context, string) (appLoginFlow, bool, error)
+	authorizeAppLogin(context.Context, string, string) (string, bool, error)
+	completeAppLogin(context.Context, string, string, string, string) (string, string, bool, error)
+	getAppAuth(context.Context, string, string) (string, bool, error)
+	Close() error
 }
 
-type regEntry struct {
-	registration registrationContext
-	sd           webauthn.SessionData
-	exp          time.Time
+type appLoginFlow struct {
+	origin, returnTo string
 }
 
-type loginEntry struct {
-	username string
-	sd       webauthn.SessionData
-	exp      time.Time
-}
-
-type authEntry struct {
-	username string
-	exp      time.Time
-}
-
-func NewMemorySessions(ttl time.Duration) *MemorySessions {
-	return &MemorySessions{
-		ttl:  ttl,
-		reg:  map[string]regEntry{},
-		log:  map[string]loginEntry{},
-		auth: map[string]authEntry{},
-	}
-}
-
-func (m *MemorySessions) NewSID() string {
-	b := make([]byte, 16)
-	_, _ = rand.Read(b)
-	return hex.EncodeToString(b)
-}
-
-func (m *MemorySessions) PutRegistration(sid string, registration registrationContext, sd webauthn.SessionData) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.reg[sid] = regEntry{registration: registration, sd: sd, exp: time.Now().Add(m.ttl)}
-}
-
-func (m *MemorySessions) GetRegistration(sid string) (registrationContext, webauthn.SessionData, bool) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	e, ok := m.reg[sid]
-	if !ok || time.Now().After(e.exp) {
-		delete(m.reg, sid)
-		return registrationContext{}, webauthn.SessionData{}, false
-	}
-	return e.registration, e.sd, true
-}
-
-func (m *MemorySessions) PutLogin(sid, username string, sd webauthn.SessionData) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.log[sid] = loginEntry{username: username, sd: sd, exp: time.Now().Add(m.ttl)}
-}
-
-func (m *MemorySessions) GetLogin(sid string) (string, webauthn.SessionData, bool) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	e, ok := m.log[sid]
-	if !ok || time.Now().After(e.exp) {
-		delete(m.log, sid)
-		return "", webauthn.SessionData{}, false
-	}
-	return e.username, e.sd, true
-}
-
-func (m *MemorySessions) PutAuth(token, username string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.auth[token] = authEntry{username: username, exp: time.Now().Add(7 * 24 * time.Hour)}
-}
-
-func (m *MemorySessions) GetAuth(token string) (string, bool) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	e, ok := m.auth[token]
-	if !ok || time.Now().After(e.exp) {
-		delete(m.auth, token)
-		return "", false
-	}
-	return e.username, true
-}
-
-func (m *MemorySessions) DeleteAuth(token string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	delete(m.auth, token)
-}
-
-func (m *MemorySessions) DeleteSID(sid string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	delete(m.reg, sid)
-	delete(m.log, sid)
+func newSID() string {
+	var b [16]byte
+	_, _ = rand.Read(b[:])
+	return hex.EncodeToString(b[:])
 }

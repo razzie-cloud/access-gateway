@@ -31,7 +31,13 @@ func (s *Server) handler() http.Handler {
 }
 
 func (s *Server) setCookie(w http.ResponseWriter, name, value string, maxAge int) {
-	http.SetCookie(w, &http.Cookie{Name: name, Value: value, Path: "/", HttpOnly: true, Secure: strings.HasPrefix(s.cfg.Origin, "https://"), SameSite: http.SameSiteStrictMode, MaxAge: maxAge})
+	sameSite := http.SameSiteStrictMode
+	if name == "auth" {
+		// The gateway session must accompany top-level navigation from other sites.
+		// Mutations still require an exact Origin match in handler().
+		sameSite = http.SameSiteLaxMode
+	}
+	http.SetCookie(w, &http.Cookie{Name: name, Value: value, Path: "/", HttpOnly: true, Secure: strings.HasPrefix(s.cfg.Origin, "https://"), SameSite: sameSite, MaxAge: maxAge})
 }
 
 func (s *Server) currentUser(r *http.Request) (User, error) {
@@ -39,7 +45,10 @@ func (s *Server) currentUser(r *http.Request) (User, error) {
 	if err != nil {
 		return User{}, err
 	}
-	username, ok := s.mem.GetAuth(cookie.Value)
+	username, ok, err := s.sessions.GetAuth(r.Context(), cookie.Value)
+	if err != nil {
+		return User{}, err
+	}
 	if !ok {
 		return User{}, http.ErrNoCookie
 	}

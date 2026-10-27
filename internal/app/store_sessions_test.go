@@ -154,10 +154,9 @@ func TestMemorySessionsConcurrentAccess(t *testing.T) {
 }
 
 func TestNewSID(t *testing.T) {
-	m := NewMemorySessions(time.Minute)
 	seen := make(map[string]bool)
 	for range 100 {
-		sid := m.NewSID()
+		sid := newSID()
 		decoded, err := hex.DecodeString(sid)
 		require.NoError(t, err)
 		assert.Len(t, decoded, 16, "SID must encode 16 random bytes")

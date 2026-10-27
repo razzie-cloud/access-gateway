@@ -98,15 +98,20 @@ func TestSetCookie(t *testing.T) {
 			assert.Equal(t, maxAge, c.MaxAge)
 			assert.Empty(t, c.Domain)
 			assert.True(t, c.HttpOnly)
-			assert.Equal(t, http.SameSiteStrictMode, c.SameSite)
+			assert.Equal(t, http.SameSiteLaxMode, c.SameSite)
 			assert.Equal(t, strings.HasPrefix(origin, "https://"), c.Secure, "origin %s", origin)
 		}
 	}
+	s := &Server{cfg: Config{Origin: "https://auth.example"}}
+	w := httptest.NewRecorder()
+	s.setCookie(w, "sid", "ceremony", 0)
+	require.Len(t, w.Result().Cookies(), 1)
+	assert.Equal(t, http.SameSiteStrictMode, w.Result().Cookies()[0].SameSite, "ceremony cookies must remain Strict")
 }
 
 func TestCurrentUserWithoutValidSession(t *testing.T) {
-	s := &Server{mem: NewMemorySessions(time.Minute)}
-	s.mem.auth["expired"] = authEntry{username: "alice", exp: time.Now().Add(-time.Minute)}
+	s := &Server{sessions: memorySessionStore{NewMemorySessions(time.Minute)}}
+	testMemory(s).auth["expired"] = authEntry{username: "alice", exp: time.Now().Add(-time.Minute)}
 	for _, token := range []string{"", "unknown", "expired"} {
 		r := httptest.NewRequest("GET", "/", nil)
 		if token != "" {

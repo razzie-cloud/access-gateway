@@ -15,11 +15,14 @@ go build ./...
 go vet ./...
 go test ./...
 # Explicitly use a disposable local PostgreSQL backend, never production:
-TEST_DATABASE_URL='postgres://user@127.0.0.1:port/testdb?sslmode=disable' go test -race ./...
+TEST_DATABASE_URL='postgres://user@127.0.0.1:port/testdb?sslmode=disable' \
+TEST_REDIS_URL='redis://127.0.0.1:redisport/0' go test -race ./...
 ```
 
 PostgreSQL tests create and drop random schemas and need CREATE SCHEMA permission.
-They skip unless TEST_DATABASE_URL is set. They exercise authorization, QR PNG
+They skip unless both TEST_DATABASE_URL and TEST_REDIS_URL are set. Redis-only
+tests need TEST_REDIS_URL and clean only random key namespaces, never FLUSHDB or
+CONFIG. Use local disposable backends. Tests exercise authorization, QR PNG
 output, expiration, account binding, transactional rollback, concurrent link
 consumption, bootstrap retries/races, and upgrading an existing account to admin.
 For full browser validation, use Chromium's CDP WebAuthn virtual authenticator
@@ -57,7 +60,12 @@ New enrollment uses database/sql transactions through the same underlying DB.
 Configuration: SERVICE_PORT (8080), POSTGRES_URI (required, or
 POSTGRES_URI_FROM), POSTGRES_PASSWORD_FILE, ORIGIN (http://localhost:8080),
 RP_ID (localhost), RP_NAME (Minimal WebAuthn). Matching CLI flags are in
-`internal/config/config.go`. Redis options are parsed but storage is in memory.
+`internal/config/config.go`. REDIS_URI (or REDIS_URI_FROM) is required for all
+sessions; REDIS_PASSWORD_FILE supports password-only and ACL URIs. `main.go`
+maps it into app.Config.RedisURL. Redis startup failures are fatal; no memory
+fallback exists. MemorySessions is a test double compiled only in tests.
+FORWARD_AUTH_ORIGINS (`--forward-auth-origins`) is a comma-separated allowlist of
+exact public app origins, default empty (forward authentication disabled).
 Public deployments need HTTPS, matching ORIGIN/RP_ID, and the configured ORIGIN
 must be the externally reachable origin used to generate links. Do not build
 absolute registration URLs from untrusted Host or forwarded headers.
@@ -68,7 +76,7 @@ absolute registration URLs from untrusted Host or forwarded headers.
   users.is_admin and registration_links, and promotes the earliest existing
   user (created_at, then username for deterministic ties). Fresh bootstrap sets
   is_admin=true; admin-created users are always regular users.
-- Bootstrap begin holds a pending User with a UUID in MemorySessions. It must
+- Bootstrap begin holds a pending User with a UUID in Redis. It must
   not persist a user before a valid passkey response. Finish locks the bootstrap
   app_states row, checks that no users exist, inserts admin and credential, and
   deletes bootstrap state in one transaction. Competing finishes must yield
@@ -104,11 +112,37 @@ absolute registration URLs from untrusted Host or forwarded headers.
 - All POSTs require an Origin header matching configured ORIGIN. /api/ POSTs also
   require application/json. Maintain these checks when adding mutation routes.
 - Responses use no-store, no-referrer, nosniff, and a self-only CSP (QR images
-  allow data:). Cookies are HttpOnly, SameSite=Strict, and Secure for HTTPS origins.
-- Registration/login ceremonies and auth sessions remain process-local. Ceremony
-  map entries expire after 30 minutes; WebAuthn challenge expiry and link expiry
-  may be earlier. Auth expires after 7 days. Restarting loses sessions but not
-  stored links or passkeys. Multiple replicas require shared session storage.
-- Unknown paths return 404; there is still no forward-auth handler. Do not infer
-  forward-auth functionality from an HTML response or add deployment changes as
-  part of ordinary gateway validation.
+  allow data:). Cookies are HttpOnly and Secure for HTTPS origins. Ceremony
+  cookies are SameSite=Strict; gateway auth and app cookies use SameSite=Lax
+  for top-level navigation between unrelated sites. POST Origin checks remain.
+- Redis stores ceremonies (30 minutes), auth sessions (7 days), app sessions
+  (bounded by parent auth TTL), SSO flows (10 minutes), and grants (1 minute).
+  WebAuthn challenge expiry and link expiry may be earlier. Replicas share a
+  namespace derived from ORIGIN and require the same Redis database/config.
+  Gateway restarts preserve sessions; Redis durability depends on its backend.
+- A bounded LRU caches up to 4096 immutable payloads for at most 30 seconds.
+  Always check Redis PTTL before using cached authorization data. Do not serve
+  cached sessions on Redis errors, missing keys, or keys without a positive TTL.
+  All writes use unique immutable keys; never replace an existing token identity.
+- Redis keys and parent references contain token hashes, never raw bearer tokens.
+  Login completion and SSO redemption must atomically validate, consume, and
+  create session records in Redis. Never implement one-time consumption through
+  a local cache or separate GET/DEL commands. Keep Redis command retries disabled
+  for these non-idempotent scripts. Successful registration still relies on its
+  PostgreSQL transaction to prevent replay if Redis ceremony cleanup fails.
+- GET /forward_auth validates a separate app session using trusted proxy headers
+  and returns 204 with X-Auth-Request-User (UUID) and X-Auth-Request-Name, or 303
+  to the configured ORIGIN's /auth/authorize path. Empty allowlists return 503;
+  malformed/unlisted forwarded origins return 400. Unknown paths return 404.
+- The gateway session must never be accepted as an app session or copied to an
+  app. App sessions bind to exact allowed origins and live gateway sessions.
+  Logging out of the gateway revokes derived app sessions. User lookup failures
+  must deny access; never echo client-supplied identity headers.
+- /auth/authorize reuses the gateway session or renders the existing passkey UI.
+  Successful login reloads the authorize URL. Caddy forwards the app callback
+  (/_auth/callback) through /forward_auth; its non-2xx response sets host-only app
+  cookies and redirects to the original URL. No separate callback route is needed.
+- Callback state cookies bind the browser to a ten-minute flow and one-minute
+  single-use code. Check state, exact app origin, expiry, and live parent session
+  before consuming atomically. Codes are stored hashed. HTTPS app cookies use
+  the __Host- prefix; all app/state cookies have Path=/ and no Domain attribute.

@@ -18,13 +18,14 @@ func prepareConfig(t *testing.T, args ...string) {
 	t.Cleanup(func() { os.Args = originalArgs })
 	os.Args = append([]string{"access-gateway"}, args...)
 	for _, key := range []string{
-		"SERVICE_PORT", "ORIGIN", "RP_ID", "RP_NAME",
+		"SERVICE_PORT", "ORIGIN", "RP_ID", "RP_NAME", "FORWARD_AUTH_ORIGINS",
 		"POSTGRES_URI", "POSTGRES_URI_FROM", "POSTGRES_PASSWORD_FILE",
 		"REDIS_URI", "REDIS_URI_FROM", "REDIS_PASSWORD_FILE",
 	} {
 		t.Setenv(key, "")
 		require.NoError(t, os.Unsetenv(key))
 	}
+	t.Setenv("REDIS_URI", "redis://localhost:6379/0")
 }
 
 func TestLoadDefaults(t *testing.T) {
@@ -37,6 +38,7 @@ func TestLoadDefaults(t *testing.T) {
 	assert.Equal(t, "http://localhost:8080", cfg.Origin)
 	assert.Equal(t, "localhost", cfg.RPID)
 	assert.Equal(t, "Minimal WebAuthn", cfg.RPName)
+	assert.Empty(t, cfg.ForwardAuthOrigins)
 }
 
 func TestLoadGatewaySettings(t *testing.T) {
@@ -49,6 +51,8 @@ func TestLoadGatewaySettings(t *testing.T) {
 				{"ORIGIN", "--origin", "https://login.example.com"},
 				{"RP_ID", "--rp-id", "example.com"},
 				{"RP_NAME", "--rp-name", "Gateway"},
+				{"FORWARD_AUTH_ORIGINS", "--forward-auth-origins", "https://app.example.com,https://other.example.net"},
+				{"REDIS_URI", "--redis-uri", "redis://sessions:6379/0"},
 			}
 			for _, v := range values {
 				if fromArgs {
@@ -67,6 +71,8 @@ func TestLoadGatewaySettings(t *testing.T) {
 			assert.Equal(t, values[2].value, cfg.Origin)
 			assert.Equal(t, values[3].value, cfg.RPID)
 			assert.Equal(t, values[4].value, cfg.RPName)
+			assert.Equal(t, values[5].value, cfg.ForwardAuthOrigins)
+			assert.Equal(t, values[6].value, cfg.RedisURI)
 		})
 	}
 }
@@ -104,4 +110,25 @@ func TestLoadRequiresPostgresURI(t *testing.T) {
 	cfg, err := Load()
 	assert.Nil(t, cfg)
 	assert.ErrorContains(t, err, "Postgres URI is required")
+}
+
+func TestLoadRequiresRedisURI(t *testing.T) {
+	prepareConfig(t)
+	t.Setenv("POSTGRES_URI", "postgres://user@db/gateway")
+	t.Setenv("REDIS_URI", "")
+	cfg, err := Load()
+	assert.Nil(t, cfg)
+	assert.ErrorContains(t, err, "Redis URI is required")
+}
+
+func TestRedisPasswordFileWithoutUsername(t *testing.T) {
+	prepareConfig(t)
+	t.Setenv("POSTGRES_URI", "postgres://user@db/gateway")
+	t.Setenv("REDIS_URI", "rediss://sessions:6379/2")
+	passwordFile := filepath.Join(t.TempDir(), "redis-password")
+	require.NoError(t, os.WriteFile(passwordFile, []byte("p@ss:word\n"), 0600))
+	t.Setenv("REDIS_PASSWORD_FILE", passwordFile)
+	cfg, err := Load()
+	require.NoError(t, err)
+	assert.Equal(t, "rediss://:p%40ss%3Aword@sessions:6379/2", cfg.RedisURI)
 }

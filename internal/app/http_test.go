@@ -16,9 +16,9 @@ import (
 
 func unitServer() *Server {
 	s := &Server{
-		cfg: Config{Origin: "https://auth.example"},
-		mem: NewMemorySessions(time.Minute),
-		mux: http.NewServeMux(),
+		cfg:      Config{Origin: "https://auth.example"},
+		sessions: memorySessionStore{NewMemorySessions(time.Minute)},
+		mux:      http.NewServeMux(),
 	}
 	s.routes()
 	return s
@@ -29,6 +29,7 @@ func TestRoutesRejectWrongMethod(t *testing.T) {
 	for _, tc := range []struct{ method, path string }{
 		{"POST", "/"}, {"POST", "/register"}, {"POST", "/ui/state"},
 		{"POST", "/api/bootstrap"}, {"POST", "/api/me"},
+		{"POST", "/forward_auth"}, {"POST", "/auth/authorize"},
 		{"GET", "/ui/users"}, {"GET", "/ui/links"}, {"GET", "/ui/logout"},
 		{"GET", "/api/register/begin"}, {"GET", "/api/register/finish"},
 		{"GET", "/api/login/begin"}, {"GET", "/api/login/finish"}, {"GET", "/api/logout"},
@@ -63,8 +64,8 @@ func TestBeginRejectsInvalidInput(t *testing.T) {
 			assert.Equal(t, http.StatusBadRequest, w.Code)
 			assert.Equal(t, tc.message, body["error"])
 			assert.Empty(t, w.Result().Cookies(), "invalid input created a cookie")
-			assert.Empty(t, s.mem.reg, "invalid input created a registration ceremony")
-			assert.Empty(t, s.mem.log, "invalid input created a login ceremony")
+			assert.Empty(t, testMemory(s).reg, "invalid input created a registration ceremony")
+			assert.Empty(t, testMemory(s).log, "invalid input created a login ceremony")
 		})
 	}
 }
@@ -75,8 +76,8 @@ func TestFinishRequiresLiveCeremony(t *testing.T) {
 			t.Run(ceremony+"/"+sid, func(t *testing.T) {
 				s := unitServer()
 				past := time.Now().Add(-time.Minute)
-				s.mem.reg["expired"] = regEntry{exp: past}
-				s.mem.log["expired"] = loginEntry{exp: past}
+				testMemory(s).reg["expired"] = regEntry{exp: past}
+				testMemory(s).log["expired"] = loginEntry{exp: past}
 				r := httptest.NewRequest("POST", "/api/"+ceremony+"/finish", strings.NewReader(`{}`))
 				r.Header.Set("Origin", s.cfg.Origin)
 				r.Header.Set("Content-Type", "application/json")
@@ -90,7 +91,7 @@ func TestFinishRequiresLiveCeremony(t *testing.T) {
 				w := httptest.NewRecorder()
 				s.handler().ServeHTTP(w, r)
 				assert.Equal(t, http.StatusBadRequest, w.Code)
-				assert.Empty(t, s.mem.auth, "rejected finish issued an auth session")
+				assert.Empty(t, testMemory(s).auth, "rejected finish issued an auth session")
 				assert.Empty(t, w.Result().Cookies(), "rejected finish issued a cookie")
 			})
 		}
@@ -99,9 +100,9 @@ func TestFinishRequiresLiveCeremony(t *testing.T) {
 
 func TestMeAndLogout(t *testing.T) {
 	s := unitServer()
-	s.mem.PutAuth("valid", "alice")
-	s.mem.PutAuth("other", "bob")
-	s.mem.auth["expired"] = authEntry{username: "alice", exp: time.Now().Add(-time.Minute)}
+	testMemory(s).PutAuth("valid", "alice")
+	testMemory(s).PutAuth("other", "bob")
+	testMemory(s).auth["expired"] = authEntry{username: "alice", exp: time.Now().Add(-time.Minute)}
 	for _, token := range []string{"", "unknown", "expired", "valid"} {
 		t.Run("me/"+token, func(t *testing.T) {
 			w := request(s, "GET", "/api/me", "", token)
@@ -131,9 +132,9 @@ func TestMeAndLogout(t *testing.T) {
 		assert.Empty(t, cookies[0].Value)
 		assert.Equal(t, -1, cookies[0].MaxAge, "logout did not expire the auth cookie")
 	}
-	_, ok := s.mem.GetAuth("valid")
+	_, ok := testMemory(s).GetAuth("valid")
 	assert.False(t, ok, "logout left the auth session usable")
-	username, ok := s.mem.GetAuth("other")
+	username, ok := testMemory(s).GetAuth("other")
 	assert.True(t, ok, "logout removed another user's auth session")
 	assert.Equal(t, "bob", username)
 }
@@ -179,8 +180,8 @@ func TestReadJSON(t *testing.T) {
 
 func TestCeremonyTypesCannotBeInterchanged(t *testing.T) {
 	s := unitServer()
-	s.mem.PutLogin("login-only", "alice", webauthn.SessionData{})
-	s.mem.PutRegistration("registration-only", registrationContext{}, webauthn.SessionData{})
+	testMemory(s).PutLogin("login-only", "alice", webauthn.SessionData{})
+	testMemory(s).PutRegistration("registration-only", registrationContext{}, webauthn.SessionData{})
 	for _, tc := range []struct{ path, sid string }{
 		{"/api/register/finish", "login-only"},
 		{"/api/login/finish", "registration-only"},

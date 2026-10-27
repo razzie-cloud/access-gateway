@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 
 	"github.com/alexflint/go-arg"
 )
@@ -15,6 +16,7 @@ type Config struct {
 	Origin               string `arg:"--origin,env:ORIGIN" default:"http://localhost:8080"`
 	RPID                 string `arg:"--rp-id,env:RP_ID" default:"localhost"`
 	RPName               string `arg:"--rp-name,env:RP_NAME" default:"Minimal WebAuthn"`
+	ForwardAuthOrigins   string `arg:"--forward-auth-origins,env:FORWARD_AUTH_ORIGINS" help:"Comma-separated exact public app origins allowed to use forward auth"`
 	PostgresURI          string `arg:"--postgres-uri,env:POSTGRES_URI"`
 	PostgresURIFrom      string `arg:"--postgres-uri-from,env:POSTGRES_URI_FROM"`
 	PostgresPasswordFile string `arg:"--postgres-password-file,env:POSTGRES_PASSWORD_FILE"`
@@ -78,8 +80,15 @@ func Load() (*Config, error) {
 		if err != nil {
 			return nil, fmt.Errorf("invalid Redis URI: %w", err)
 		}
-		uri.User = url.UserPassword(uri.User.Username(), string(pwd))
+		username := ""
+		if uri.User != nil {
+			username = uri.User.Username()
+		}
+		uri.User = url.UserPassword(username, strings.TrimRight(string(pwd), "\r\n"))
 		cfg.RedisURI = uri.String()
+	}
+	if cfg.RedisURI == "" {
+		return nil, fmt.Errorf("Redis URI is required: set REDIS_URI or REDIS_URI_FROM")
 	}
 
 	return &cfg, nil

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -20,6 +21,8 @@ import (
 )
 
 func (s *Server) routes() {
+	s.mux.HandleFunc("/forward_auth", s.handleForwardAuth)
+	s.mux.HandleFunc("/auth/authorize", s.handleAuthorize)
 	s.mux.Handle("/static/", http.FileServer(http.FS(web.Assets)))
 	s.mux.HandleFunc("/", s.handlePage)
 	s.mux.HandleFunc("/register", s.handlePage)
@@ -132,8 +135,11 @@ func (s *Server) handleRegisterBegin(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 500, map[string]string{"error": "webauthn error"})
 		return
 	}
-	sid := s.mem.NewSID()
-	s.mem.PutRegistration(sid, registration, *sd)
+	sid := newSID()
+	if err := s.sessions.PutRegistration(r.Context(), sid, registration, *sd); err != nil {
+		writeJSON(w, 503, map[string]string{"error": "session storage unavailable"})
+		return
+	}
 	s.setCookie(w, "sid", sid, 0)
 	writeJSON(w, 200, opts)
 }
@@ -148,7 +154,11 @@ func (s *Server) handleRegisterFinish(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]string{"error": "missing sid"})
 		return
 	}
-	registration, sd, ok := s.mem.GetRegistration(sid.Value)
+	registration, sd, ok, err := s.sessions.GetRegistration(r.Context(), sid.Value)
+	if err != nil {
+		writeJSON(w, 503, map[string]string{"error": "session storage unavailable"})
+		return
+	}
 	if !ok {
 		writeJSON(w, 400, map[string]string{"error": "registration session expired"})
 		return
@@ -176,7 +186,11 @@ func (s *Server) handleRegisterFinish(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	s.mem.DeleteSID(sid.Value)
+	if err := s.sessions.DeleteSID(r.Context(), sid.Value); err != nil {
+		// Enrollment already committed in PostgreSQL. Its transaction prevents
+		// reuse even if the expired ceremony cannot yet be removed from Redis.
+		log.Print("unable to remove completed registration session")
+	}
 	s.setCookie(w, "sid", "", -1)
 	writeJSON(w, 200, map[string]any{"ok": true})
 }
@@ -231,8 +245,11 @@ func (s *Server) handleLoginBegin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sid := s.mem.NewSID()
-	s.mem.PutLogin(sid, req.Username, *sessionData)
+	sid := newSID()
+	if err := s.sessions.PutLogin(r.Context(), sid, req.Username, *sessionData); err != nil {
+		writeJSON(w, 503, map[string]string{"error": "session storage unavailable"})
+		return
+	}
 	s.setCookie(w, "sid", sid, 0)
 
 	writeJSON(w, 200, opts)
@@ -252,7 +269,11 @@ func (s *Server) handleLoginFinish(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 
-	username, sd, ok := s.mem.GetLogin(sid.Value)
+	username, sd, ok, err := s.sessions.GetLogin(ctx, sid.Value)
+	if err != nil {
+		writeJSON(w, 503, map[string]string{"error": "session storage unavailable"})
+		return
+	}
 	if !ok {
 		writeJSON(w, 400, map[string]string{"error": "login session expired"})
 		return
@@ -283,11 +304,18 @@ func (s *Server) handleLoginFinish(w http.ResponseWriter, r *http.Request) {
 	auth := make([]byte, 32)
 	_, _ = rand.Read(auth)
 	authHex := hex.EncodeToString(auth)
-	s.mem.PutAuth(authHex, username)
+	ok, err = s.sessions.CompleteLogin(ctx, sid.Value, authHex, username)
+	if err != nil {
+		writeJSON(w, 503, map[string]string{"error": "session storage unavailable"})
+		return
+	}
+	if !ok {
+		writeJSON(w, 400, map[string]string{"error": "login session expired or already used"})
+		return
+	}
 
 	s.setCookie(w, "auth", authHex, 0)
 
-	s.mem.DeleteSID(sid.Value)
 	s.setCookie(w, "sid", "", -1)
 
 	writeJSON(w, 200, map[string]any{"ok": true})
@@ -303,7 +331,11 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"authenticated": false})
 		return
 	}
-	u, ok := s.mem.GetAuth(c.Value)
+	u, ok, err := s.sessions.GetAuth(r.Context(), c.Value)
+	if err != nil {
+		writeJSON(w, 503, map[string]string{"error": "session storage unavailable"})
+		return
+	}
 	writeJSON(w, 200, map[string]any{"authenticated": ok, "username": u})
 }
 
@@ -314,7 +346,10 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	}
 	c, err := r.Cookie("auth")
 	if err == nil && c.Value != "" {
-		s.mem.DeleteAuth(c.Value)
+		if err := s.sessions.DeleteAuth(r.Context(), c.Value); err != nil {
+			writeJSON(w, 503, map[string]string{"error": "session storage unavailable"})
+			return
+		}
 	}
 	s.setCookie(w, "auth", "", -1)
 	writeJSON(w, 200, map[string]any{"ok": true})
