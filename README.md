@@ -209,3 +209,28 @@ background requests should establish the app session through top-level browser
 navigation first. App session lifetimes are bounded by the gateway's seven-day
 session. Sessions, codes, and flows are shared through Redis, so a handoff may
 start on one gateway replica and finish on another.
+
+## Publish an image
+
+The `Publish image` workflow builds the tagged commit's Dockerfile for
+`linux/amd64` and pushes `ghcr.io/razzie-cloud/access-gateway:<git-tag>` when a
+new tag is pushed to this service repository. For example, from this directory:
+
+```sh
+git tag v1.2.3
+git push origin v1.2.3
+```
+
+The tagged commit must include `.github/workflows/publish-image.yml`. Creating
+a new tag through GitHub's release UI also triggers the workflow. Tags in the
+parent razcloud repository do not trigger service builds.
+
+The image tag exactly matches the Git tag, including any `v` prefix; no `latest`
+alias is added. Use Docker-compatible tags: 1–128 ASCII letters, digits,
+underscores, dots, or hyphens, starting with a letter, digit, or underscore.
+Incompatible tags fail before publication.
+
+Authentication uses the built-in `GITHUB_TOKEN` with `packages: write`; no custom
+registry secret is needed. Organization policy must allow package creation;
+existing packages must grant this repository Actions write access. Set package
+visibility to public for unauthenticated pulls, or authenticate deployment hosts.
