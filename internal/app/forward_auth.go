@@ -24,8 +24,12 @@ func publicOrigin(raw string) (string, error) {
 		return "", fmt.Errorf("invalid public origin %q", raw)
 	}
 	if u.Scheme != "https" {
-		ip := net.ParseIP(u.Hostname())
-		if u.Scheme != "http" || (u.Hostname() != "localhost" && (ip == nil || !ip.IsLoopback())) {
+		host := strings.ToLower(u.Hostname())
+		ip := net.ParseIP(host)
+		// Browsers resolve the reserved .localhost namespace to loopback. This
+		// permits separate app cookie hosts through WSL's localhost forwarding.
+		local := host == "localhost" || strings.HasSuffix(host, ".localhost") || (ip != nil && ip.IsLoopback())
+		if u.Scheme != "http" || !local {
 			return "", fmt.Errorf("public origin must use HTTPS (HTTP is allowed on loopback): %q", raw)
 		}
 	}

@@ -36,6 +36,7 @@ func TestForwardAuthConfig(t *testing.T) {
 	for _, origin := range []string{
 		"https://app.example.net", "https://app.example.net:8443/",
 		"http://localhost:8081", "http://127.0.0.1:8082", "http://[::1]:8083",
+		"http://files.localhost:8082", "http://Files.Localhost:8082", "http://files.wsl.localhost:8082",
 	} {
 		assert.NoError(t, validateForwardAuthConfig(Config{Origin: "https://auth.example", ForwardAuthOrigins: []string{origin}}))
 	}
@@ -44,6 +45,8 @@ func TestForwardAuthConfig(t *testing.T) {
 		"https://app.example.net/path", "https://app.example.net?next=evil", "https://app.example.net#evil",
 		"https://user@app.example.net", "https://app.example.net,evil.example", "https://auth.example",
 		"https://app.example.net:bad", "https://app.example.net\\evil",
+		"http://files.localhost.example:8082", "http://notlocalhost:8082", "http://files-localhost:8082",
+		"http://files.localhost@evil.example:8082", "http://*.localhost:8082",
 	} {
 		t.Run(origin, func(t *testing.T) {
 			cfg := Config{Origin: "https://auth.example", ForwardAuthOrigins: []string{origin}}
@@ -193,11 +196,31 @@ func TestAppCallbackRequiresBrowserState(t *testing.T) {
 }
 
 func TestForwardAuthLocalCookie(t *testing.T) {
-	s := unitServer()
-	s.cfg.ForwardAuthOrigins = []string{"http://127.0.0.1:8081"}
-	_, state := startAppLogin(t, s, s.cfg.ForwardAuthOrigins[0], "/")
-	assert.True(t, strings.HasPrefix(state.Name, "razcloud_state_"))
-	assert.False(t, state.Secure)
+	for _, origin := range []string{"http://127.0.0.1:8081", "http://files.localhost:8082"} {
+		t.Run(origin, func(t *testing.T) {
+			s := unitServer()
+			s.cfg.ForwardAuthOrigins = []string{origin}
+			testMemory(s).PutAuth("central", "alice")
+			authorize, state := startAppLogin(t, s, origin, "/notes?sort=latest")
+			assert.True(t, strings.HasPrefix(state.Name, "razcloud_state_"))
+			assert.False(t, state.Secure)
+			w := request(s, "GET", authorize, "", "central")
+			require.Equal(t, http.StatusSeeOther, w.Code)
+			callback, err := url.Parse(w.Header().Get("Location"))
+			require.NoError(t, err)
+			assert.Equal(t, origin, callback.Scheme+"://"+callback.Host)
+			w = forwardRequest(s, origin, callback.RequestURI(), state)
+			require.Equal(t, http.StatusSeeOther, w.Code)
+			assert.Equal(t, origin+"/notes?sort=latest", w.Header().Get("Location"))
+			cookies := w.Result().Cookies()
+			require.Len(t, cookies, 2)
+			assert.Equal(t, "razcloud_app", cookies[0].Name)
+			assert.Empty(t, cookies[0].Domain)
+			assert.False(t, cookies[0].Secure)
+			assert.Equal(t, http.StatusBadRequest, forwardRequest(s, "http://other.localhost:8082", "/").Code,
+				"localhost subdomains must still be explicitly allowlisted")
+		})
+	}
 }
 
 func TestAuthorizeRejectsExpiredOrUnknownFlow(t *testing.T) {

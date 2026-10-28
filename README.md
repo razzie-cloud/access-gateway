@@ -131,7 +131,9 @@ FORWARD_AUTH_ORIGINS=https://app.example.com,https://other.example.net
 ```
 
 Origins include a scheme and optional port, without a path, query, or wildcard.
-HTTPS is required, except for loopback HTTP origins used in local development.
+HTTPS is required, except for loopback HTTP origins used in local development
+(loopback IPs, `localhost`, and names ending in `.localhost`, such as
+`http://files.localhost:8082`). These names still require exact allowlist entries.
 An empty allowlist disables forward authentication (503). The gateway's own
 origin must not be in this list.
 
