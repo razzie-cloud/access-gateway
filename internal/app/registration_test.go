@@ -313,3 +313,23 @@ func TestPostgresExistingUserUpgrade(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, later.IsAdmin, "later user became admin")
 }
+
+func TestPostgresExistingDeviceUpgrade(t *testing.T) {
+	s := postgresServer(t)
+	user := addUser(t, s, "existing-user", false)
+	require.NoError(t, goose.DownTo(s.db, "migrations", 2))
+	credential := &webauthn.Credential{ID: []byte("existing-device")}
+	data, err := marshalCredential(credential)
+	require.NoError(t, err)
+	_, err = s.db.Exec(`INSERT INTO webauthn_credentials(user_id,credential_id,credential_json,created_at) VALUES($1,$2,$3,0)`, user.ID, credential.ID, data)
+	require.NoError(t, err)
+	require.NoError(t, gatewaydb.RunMigrations(s.db))
+	devices, err := s.listDevices(t.Context(), user)
+	require.NoError(t, err)
+	require.Len(t, devices, 1)
+	assert.Equal(t, "Unnamed device", devices[0].Name)
+	waUser, err := s.loadWebAuthnUser(t.Context(), user)
+	require.NoError(t, err)
+	require.Len(t, waUser.Creds, 1)
+	assert.Equal(t, *credential, waUser.Creds[0])
+}

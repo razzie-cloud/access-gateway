@@ -18,6 +18,7 @@ type WebAuthnCredential struct {
 	UserID         []byte
 	CredentialID   []byte
 	CredentialJSON []byte
+	DeviceName     string
 	CreatedAt      int64
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/go-webauthn/webauthn/webauthn"
+	"time"
 )
 
 // The memory implementation is a test double only; NewServer always uses Redis.
@@ -43,11 +44,16 @@ func (m memorySessionStore) DeleteSID(_ context.Context, t string) error {
 	m.mem.DeleteSID(t)
 	return nil
 }
-func (m memorySessionStore) CompleteLogin(_ context.Context, sid, token, name string) (bool, error) {
+func (m memorySessionStore) CompleteLogin(_ context.Context, sid, token, name string, deviceID int64) (bool, error) {
 	if n, _, ok := m.mem.GetLogin(sid); !ok || n != name {
 		return false, nil
 	}
 	m.mem.PutAuth(token, name)
+	m.mem.mu.Lock()
+	auth := m.mem.auth[token]
+	auth.deviceID = deviceID
+	m.mem.auth[token] = auth
+	m.mem.mu.Unlock()
 	m.mem.DeleteSID(sid)
 	return true, nil
 }
@@ -73,4 +79,41 @@ func (m memorySessionStore) completeAppLogin(_ context.Context, f, c, s, o strin
 func (m memorySessionStore) getAppAuth(_ context.Context, t, o string) (string, bool, error) {
 	n, ok := m.mem.getAppAuth(t, o)
 	return n, ok, nil
+}
+
+func (m memorySessionStore) ListSessions(_ context.Context) ([]sessionSummary, error) {
+	m.mem.mu.Lock()
+	defer m.mem.mu.Unlock()
+	var sessions []sessionSummary
+	now := time.Now()
+	for token, auth := range m.mem.auth {
+		if now.Before(auth.exp) {
+			sessions = append(sessions, sessionSummary{ID: hashToken(token), Kind: "Gateway", Username: auth.username, ExpiresAt: auth.exp, DeviceID: auth.deviceID})
+		}
+	}
+	for token, app := range m.mem.apps {
+		if auth, ok := m.mem.auth[app.parent]; ok && now.Before(auth.exp) {
+			sessions = append(sessions, sessionSummary{ID: hashToken(token), Kind: "Application", Username: auth.username, Origin: app.origin, ExpiresAt: auth.exp, DeviceID: auth.deviceID, ParentID: hashToken(app.parent)})
+		}
+	}
+	return sessions, nil
+}
+
+func (m memorySessionStore) DeleteSession(_ context.Context, kind, id string) error {
+	m.mem.mu.Lock()
+	defer m.mem.mu.Unlock()
+	if kind == "Gateway" {
+		for token := range m.mem.auth {
+			if hashToken(token) == id {
+				delete(m.mem.auth, token)
+			}
+		}
+	} else {
+		for token := range m.mem.apps {
+			if hashToken(token) == id {
+				delete(m.mem.apps, token)
+			}
+		}
+	}
+	return nil
 }

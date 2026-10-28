@@ -25,7 +25,7 @@ hostname (`auth.example.com`). Use the same origin when opening registration lin
 ## Set up the administrator
 
 On the first start with no users, find `BOOTSTRAP TOKEN` in the gateway logs.
-Open the home page, enter a username and that token, and complete the passkey
+Open the home page, enter a username, that token and a device name, and complete the passkey
 prompt. Then sign in. The first account is the administrator; existing
 installations promote their earliest account during migration.
 
@@ -37,7 +37,7 @@ is printed only when generated; restarting does not print it again.
 Sign in on an existing device. Under **Device registration links**, choose an
 expiration from **1 minute to 30 days** (default: 60 minutes), then select
 **Generate link and QR code**. Open the link on the new device or scan the QR
-code and create its passkey. The QR image can also be downloaded.
+code, name the device and create its passkey. The QR image can also be downloaded.
 
 Each link registers one passkey for its designated account and expires at the
 displayed time, even if registration is already in progress. A canceled prompt
@@ -55,6 +55,25 @@ As administrator, use **Create a user**, then choose that account under
 The recipient registers their first passkey and can then sign in and onboard
 their own devices. New accounts are regular users, without admin permissions.
 
+## Manage devices and sessions
+
+Every signed-in user can view their own devices and active gateway/application
+sessions. Administrators see all users, UUIDs, devices and sessions. Device names
+identify registered passkeys; each new session records the passkey used to sign
+in, and application sessions inherit that association.
+
+Use **Rename** at any time, including for the current device. **Remove session**
+ends another session; removing a gateway session also revokes its application
+sessions. This browser's session and its application sessions are protected;
+use **Sign out** to end them. A device can be removed once all its sessions have
+ended, preventing future logins with that passkey. Login completion and device
+removal lock the credential row so a concurrent login cannot bypass this check.
+
+Existing passkeys start as **Unnamed device** and can be renamed. Older sessions
+show **Unknown device** until the user signs in again. While those sessions are
+live, their account's devices remain protected from removal. End the older
+sessions from a new sign-in to identify and manage individual devices.
+
 ## Operational notes
 
 PostgreSQL stores users, passkeys, and registration links; migrations run at
@@ -63,7 +82,7 @@ flows, and one-time authorization grants. Gateway restarts preserve these record
 Replicas must use the same Redis backend/database and public `ORIGIN` to share
 sessions. Keys are namespaced by a hash of `ORIGIN`, and bearer tokens are stored
 only as SHA-256 hashes in Redis key names and references. There is currently no UI
-for revoking passkeys or unused links.
+for revoking unused registration links.
 
 Configure Redis using `REDIS_URI` (`--redis-uri`), or discover its URI with
 `REDIS_URI_FROM` (`--redis-uri-from`). `REDIS_PASSWORD_FILE`

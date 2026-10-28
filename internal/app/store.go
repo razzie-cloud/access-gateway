@@ -13,6 +13,23 @@ import (
 	"github.com/go-webauthn/webauthn/webauthn"
 )
 
+func (s *Server) listUsers(ctx context.Context) ([]User, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id,username,is_admin,created_at FROM users ORDER BY username`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var users []User
+	for rows.Next() {
+		var u User
+		if err := rows.Scan(&u.ID, &u.Username, &u.IsAdmin, &u.CreatedAt); err != nil {
+			return nil, err
+		}
+		users = append(users, u)
+	}
+	return users, rows.Err()
+}
+
 func (s *Server) countUsers(ctx context.Context) (int, error) {
 	var users []User
 	if err := s.repo.FindAll(ctx, &users); err != nil {
@@ -79,16 +96,35 @@ func (s *Server) loadWebAuthnUser(ctx context.Context, u User) (WebAuthnUser, er
 	return WebAuthnUser{User: u, Creds: creds}, nil
 }
 
-func (s *Server) upsertCredential(ctx context.Context, userID []byte, c *webauthn.Credential) error {
+// Lock the registered device until its session is created. Device removal uses
+// the same lock, so an in-flight login cannot resurrect a deleted credential or
+// create a session after the removal's in-use check.
+func (s *Server) completeDeviceLogin(ctx context.Context, sid, token string, user User, c *webauthn.Credential) (bool, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+	var deviceID int64
+	if err := tx.QueryRowContext(ctx, `SELECT id FROM webauthn_credentials WHERE user_id=$1 AND credential_id=$2 FOR UPDATE`, user.ID, c.ID).Scan(&deviceID); err != nil {
+		return false, err
+	}
 	b, err := marshalCredential(c)
 	if err != nil {
-		return err
+		return false, err
 	}
-	row := WebAuthnCredential{
-		UserID:         userID,
-		CredentialID:   c.ID,
-		CredentialJSON: b,
-		CreatedAt:      time.Now().Unix(),
+	if _, err := tx.ExecContext(ctx, `UPDATE webauthn_credentials SET credential_json=$2 WHERE id=$1`, deviceID, b); err != nil {
+		return false, err
 	}
-	return s.repo.Insert(ctx, &row, rel.OnConflictFragment(`("credential_id") DO UPDATE SET credential_json = EXCLUDED.credential_json`))
+	ok, err := s.sessions.CompleteLogin(ctx, sid, token, user.Username, deviceID)
+	if err != nil || !ok {
+		return false, err
+	}
+	if err := tx.Commit(); err != nil {
+		cleanup, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		_ = s.sessions.DeleteAuth(cleanup, token)
+		return false, err
+	}
+	return true, nil
 }

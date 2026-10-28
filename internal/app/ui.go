@@ -29,6 +29,14 @@ type viewData struct {
 	Link              string
 	QR                template.URL
 	Expires           string
+	AdminUsers        []adminUser
+	Sessions          []sessionView
+	Devices           []deviceView
+}
+
+type adminUser struct {
+	User
+	UUID string
 }
 
 func render(w http.ResponseWriter, status int, name string, data viewData) {
@@ -59,23 +67,33 @@ func (s *Server) state(r *http.Request) (viewData, error) {
 	}
 	data.User = &user
 	if user.IsAdmin {
-		rows, err := s.db.QueryContext(r.Context(), `SELECT id,username,is_admin,created_at FROM users ORDER BY username`)
+		data.Users, err = s.listUsers(r.Context())
 		if err != nil {
-			return data, err
-		}
-		defer rows.Close()
-		for rows.Next() {
-			var u User
-			if err := rows.Scan(&u.ID, &u.Username, &u.IsAdmin, &u.CreatedAt); err != nil {
-				return data, err
-			}
-			data.Users = append(data.Users, u)
-		}
-		if err := rows.Err(); err != nil {
 			return data, err
 		}
 	}
 	return data, nil
+}
+
+func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	user, err := s.currentUser(r)
+	if err != nil {
+		if errors.Is(err, errSessionStore) {
+			render(w, 503, "message", viewData{Error: "Session storage unavailable"})
+			return
+		}
+		render(w, 401, "message", viewData{Error: "Sign in first"})
+		return
+	}
+	if !user.IsAdmin {
+		render(w, 403, "message", viewData{Error: "Administrator access required"})
+		return
+	}
+	s.renderActivity(w, r, user, "")
 }
 
 func (s *Server) handlePage(w http.ResponseWriter, r *http.Request) {

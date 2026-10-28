@@ -98,11 +98,32 @@ absolute registration URLs from untrusted Host or forwarded headers.
   preserve the link if credential insertion fails. Enrollment must never upsert
   an existing credential or overwrite another account's credential.
 - Consuming a link does not log the user in. Login is a separate WebAuthn ceremony.
-- No passkey/link deletion, role editing, or account recovery UI exists yet.
+- Migration `00003` adds device_name to passkeys. Registration accepts optional
+  deviceName, trims it and stores it in the ceremony and enrollment transaction.
+  Names contain 1–80 Unicode characters without controls. Old passkeys and
+  ceremonies default to Unnamed device; names can be changed while in use.
+- Device removal must lock the credential row, then check live Redis sessions.
+  Login completion locks the same row and updates only an existing credential;
+  never upsert a credential during login. Create its device-bound Redis session
+  before releasing the row lock. Reject removal while any session uses the
+  device; legacy sessions without a device ID protect all of that user's devices.
+- No link deletion, role editing, or account recovery UI exists yet.
 
 ## HTTP and sessions
 
 - GET / and /register: full pages. GET /ui/state: account fragment.
+- GET /ui/activity: signed-in users see their own devices and sessions; admins
+  also see all users/UUIDs, devices and sessions. GET /ui/admin is an admin-only
+  alias. HTMX loads and refreshes the panel. Filter rows server-side, never in JS.
+- POST /ui/devices/rename (device_id, device_name), /ui/devices/remove (device_id)
+  and /ui/sessions/remove (kind, session_id): owner or admin only. Recheck access
+  for each action; protect the caller's current gateway session and its app
+  sessions. Device removal requires no live sessions (see locking rules above).
+- Session references are token hashes; never render bearer tokens or ceremony
+  data. Redis listing scans only the gateway namespace and excludes app sessions
+  with expired/revoked parents. New auth payloads include DeviceID; app sessions
+  inherit it through their parent. Legacy sessions remain usable with unknown
+  devices. Removing an auth record revokes every app session derived from it.
 - POST /ui/users: admin-only account creation (`username` form field); returns
   refreshed account HTML on success using HX-Retarget. Unique usernames return 409.
 - POST /ui/links: returns a link, inline QR PNG, download link, and expiry.

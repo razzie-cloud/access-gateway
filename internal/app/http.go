@@ -28,6 +28,11 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/register", s.handlePage)
 	s.mux.HandleFunc("/ui/state", s.handleState)
 	s.mux.HandleFunc("/ui/users", s.handleCreateUser)
+	s.mux.HandleFunc("/ui/admin", s.handleAdmin)
+	s.mux.HandleFunc("/ui/activity", s.handleActivity)
+	s.mux.HandleFunc("/ui/devices/rename", s.handleRenameDevice)
+	s.mux.HandleFunc("/ui/devices/remove", s.handleRemoveDevice)
+	s.mux.HandleFunc("/ui/sessions/remove", s.handleRemoveSession)
 	s.mux.HandleFunc("/ui/links", s.handleCreateLink)
 	s.mux.HandleFunc("/ui/logout", s.handleUILogout)
 	s.mux.HandleFunc("/api/bootstrap", s.handleBootstrap)
@@ -69,9 +74,10 @@ func (s *Server) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 }
 
 type registerBeginReq struct {
-	Username  string `json:"username"`
-	Token     string `json:"token"`
-	LinkToken string `json:"linkToken"`
+	Username   string `json:"username"`
+	Token      string `json:"token"`
+	LinkToken  string `json:"linkToken"`
+	DeviceName string `json:"deviceName"`
 }
 
 func (s *Server) handleRegisterBegin(w http.ResponseWriter, r *http.Request) {
@@ -82,6 +88,14 @@ func (s *Server) handleRegisterBegin(w http.ResponseWriter, r *http.Request) {
 	var req registerBeginReq
 	if err := readJSON(r, &req); err != nil {
 		writeJSON(w, 400, map[string]string{"error": "bad json"})
+		return
+	}
+	req.DeviceName = strings.TrimSpace(req.DeviceName)
+	if req.DeviceName == "" {
+		req.DeviceName = "Unnamed device"
+	}
+	if !validDeviceName(req.DeviceName) {
+		writeJSON(w, 400, map[string]string{"error": "device name must contain 1–80 characters without control characters"})
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
@@ -118,6 +132,7 @@ func (s *Server) handleRegisterBegin(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 403, map[string]string{"error": "invalid, expired or used registration token"})
 		return
 	}
+	registration.DeviceName = req.DeviceName
 	waUser := WebAuthnUser{User: registration.User}
 	if registration.LinkHash != "" {
 		waUser, err = s.loadWebAuthnUser(ctx, registration.User)
@@ -296,17 +311,18 @@ func (s *Server) handleLoginFinish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.upsertCredential(ctx, u.ID, cred); err != nil {
-		writeJSON(w, 500, map[string]string{"error": "failed to store credential"})
-		return
-	}
-
 	auth := make([]byte, 32)
 	_, _ = rand.Read(auth)
 	authHex := hex.EncodeToString(auth)
-	ok, err = s.sessions.CompleteLogin(ctx, sid.Value, authHex, username)
+	ok, err = s.completeDeviceLogin(ctx, sid.Value, authHex, u, cred)
 	if err != nil {
-		writeJSON(w, 503, map[string]string{"error": "session storage unavailable"})
+		if errors.Is(err, errSessionStore) {
+			writeJSON(w, 503, map[string]string{"error": "session storage unavailable"})
+		} else if errors.Is(err, sql.ErrNoRows) {
+			writeJSON(w, 401, map[string]string{"error": "device no longer registered"})
+		} else {
+			writeJSON(w, 500, map[string]string{"error": "failed to complete login"})
+		}
 		return
 	}
 	if !ok {

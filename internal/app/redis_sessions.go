@@ -27,7 +27,10 @@ type redisLogin struct {
 	Data     webauthn.SessionData
 }
 
-type redisAuth struct{ Username string }
+type redisAuth struct {
+	Username string
+	DeviceID int64
+}
 type redisApp struct{ Origin, Parent string }
 type redisFlow struct{ Origin, ReturnTo, StateHash string }
 type redisGrant struct{ Flow, Parent string }
@@ -142,7 +145,7 @@ func (s *redisSessions) GetLogin(ctx context.Context, sid string) (string, webau
 	return v.Username, v.Data, ok, err
 }
 func (s *redisSessions) PutAuth(ctx context.Context, token, username string) error {
-	return s.put(ctx, s.key("auth", token), redisAuth{username}, authTTL)
+	return s.put(ctx, s.key("auth", token), redisAuth{Username: username}, authTTL)
 }
 func (s *redisSessions) GetAuth(ctx context.Context, token string) (string, bool, error) {
 	v, ok, err := getSession[redisAuth](ctx, s, s.key("auth", token))
@@ -174,8 +177,8 @@ redis.call('DEL', KEYS[1], KEYS[3])
 return 1
 `)
 
-func (s *redisSessions) CompleteLogin(ctx context.Context, sid, token, username string) (bool, error) {
-	payload, _ := json.Marshal(redisAuth{username})
+func (s *redisSessions) CompleteLogin(ctx context.Context, sid, token, username string, deviceID int64) (bool, error) {
+	payload, _ := json.Marshal(redisAuth{Username: username, DeviceID: deviceID})
 	keys := []string{s.key("login", sid), s.key("auth", token), s.key("registration", sid)}
 	result, err := finishLogin.Run(ctx, s.client, keys, username, payload, authTTL.Milliseconds()).Int()
 	s.cache.delete(keys[0], keys[2])

@@ -21,6 +21,7 @@ type registrationContext struct {
 	User          User
 	LinkHash      string
 	BootstrapHash string
+	DeviceName    string
 }
 
 func hashToken(token string) string {
@@ -112,7 +113,11 @@ func (s *Server) completeRegistration(ctx context.Context, registration registra
 		return err
 	}
 	// Enrollment must never overwrite a credential belonging to another account.
-	if _, err = tx.ExecContext(ctx, `INSERT INTO webauthn_credentials(user_id,credential_id,credential_json,created_at) VALUES($1,$2,$3,$4)`, registration.User.ID, credential.ID, data, time.Now().Unix()); err != nil {
+	name := registration.DeviceName
+	if name == "" { // Ceremonies started before device naming was introduced.
+		name = "Unnamed device"
+	}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO webauthn_credentials(user_id,credential_id,credential_json,created_at,device_name) VALUES($1,$2,$3,$4,$5)`, registration.User.ID, credential.ID, data, time.Now().Unix(), name); err != nil {
 		return fmt.Errorf("insert credential: %w", err)
 	}
 	return tx.Commit()

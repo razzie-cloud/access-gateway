@@ -28,6 +28,8 @@ func TestRoutesRejectWrongMethod(t *testing.T) {
 	s := unitServer()
 	for _, tc := range []struct{ method, path string }{
 		{"POST", "/"}, {"POST", "/register"}, {"POST", "/ui/state"},
+		{"POST", "/ui/admin"},
+		{"POST", "/ui/activity"}, {"GET", "/ui/devices/rename"}, {"GET", "/ui/devices/remove"}, {"GET", "/ui/sessions/remove"},
 		{"POST", "/api/bootstrap"}, {"POST", "/api/me"},
 		{"POST", "/forward_auth"}, {"POST", "/auth/authorize"},
 		{"GET", "/ui/users"}, {"GET", "/ui/links"}, {"GET", "/ui/logout"},
@@ -45,6 +47,8 @@ func TestBeginRejectsInvalidInput(t *testing.T) {
 	for _, tc := range []struct{ name, path, body, message string }{
 		{"malformed registration", "/api/register/begin", `{`, "bad json"},
 		{"unknown registration field", "/api/register/begin", `{"unexpected":true}`, "bad json"},
+		{"long device name", "/api/register/begin", `{"deviceName":"` + strings.Repeat("x", 81) + `"}`, "device name must contain 1–80 characters without control characters"},
+		{"control character in device name", "/api/register/begin", `{"deviceName":"name\nother"}`, "device name must contain 1–80 characters without control characters"},
 		{"link username override", "/api/register/begin", `{"linkToken":"link","username":"alice"}`, "ambiguous registration"},
 		{"link bootstrap override", "/api/register/begin", `{"linkToken":"link","token":"bootstrap"}`, "ambiguous registration"},
 		{"empty registration", "/api/register/begin", `{}`, "username and bootstrap token required"},

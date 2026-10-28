@@ -36,6 +36,7 @@ type loginEntry struct {
 type authEntry struct {
 	username string
 	exp      time.Time
+	deviceID int64
 }
 
 func NewMemorySessions(ttl time.Duration) *MemorySessions {

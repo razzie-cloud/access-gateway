@@ -184,7 +184,7 @@ func TestRedisLoginIsConsumedOnceAcrossReplicas(t *testing.T) {
 	_, _, ok, err := peer.GetLogin(ctx, "sid")
 	require.NoError(t, err)
 	require.True(t, ok)
-	ok, err = s.CompleteLogin(ctx, "sid", "wrong", "bob")
+	ok, err = s.CompleteLogin(ctx, "sid", "wrong", "bob", 0)
 	require.NoError(t, err)
 	assert.False(t, ok)
 	var wins atomic.Int32
@@ -195,7 +195,7 @@ func TestRedisLoginIsConsumedOnceAcrossReplicas(t *testing.T) {
 			if i%2 == 1 {
 				store = peer
 			}
-			ok, err := store.CompleteLogin(ctx, "sid", fmt.Sprint("token-", i), "alice")
+			ok, err := store.CompleteLogin(ctx, "sid", fmt.Sprint("token-", i), "alice", 0)
 			assert.NoError(t, err)
 			if ok {
 				wins.Add(1)
@@ -379,6 +379,8 @@ func TestRedisFailureReturns503WithoutIssuingCookies(t *testing.T) {
 	for _, tc := range []struct{ method, path string }{
 		{"GET", "/api/me"}, {"POST", "/api/logout"}, {"POST", "/ui/logout"},
 		{"POST", "/ui/users"}, {"POST", "/ui/links"}, {"GET", "/auth/authorize?flow=" + flow},
+		{"GET", "/ui/admin"},
+		{"GET", "/ui/activity"}, {"POST", "/ui/devices/rename"}, {"POST", "/ui/devices/remove"}, {"POST", "/ui/sessions/remove"},
 	} {
 		w := request(s, tc.method, tc.path, `{}`, "parent")
 		assert.Equal(t, 503, w.Code, tc.path)
