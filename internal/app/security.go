@@ -7,11 +7,17 @@ import (
 )
 
 func (s *Server) handler() http.Handler {
+	if s.limits == nil {
+		s.limits = newRequestLimits()
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
+		if !s.enforceRateLimits(w, r) {
+			return
+		}
 		if r.Method == http.MethodPost {
 			if r.Header.Get("Origin") != strings.TrimRight(s.cfg.Origin, "/") {
 				writeJSON(w, 403, map[string]string{"error": "request origin not allowed"})

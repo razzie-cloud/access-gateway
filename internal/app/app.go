@@ -9,6 +9,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"net/netip"
 	"time"
 
 	"github.com/go-rel/postgres"
@@ -30,6 +31,7 @@ type Config struct {
 
 	// Exact public app origins permitted to use forward authentication.
 	ForwardAuthOrigins []string
+	TrustedProxies     []string
 }
 
 type Server struct {
@@ -39,13 +41,19 @@ type Server struct {
 	repo rel.Repository
 	wa   *webauthn.WebAuthn
 
-	sessions sessionStore
+	sessions       sessionStore
+	limits         *requestLimits
+	trustedProxies []netip.Prefix
 
 	mux *http.ServeMux
 }
 
 func NewServer(cfg Config) (*Server, error) {
 	if err := validateForwardAuthConfig(cfg); err != nil {
+		return nil, err
+	}
+	proxies, err := parseTrustedProxies(cfg.TrustedProxies)
+	if err != nil {
 		return nil, err
 	}
 	sessions, err := newRedisSessions(cfg.RedisURL, cfg.Origin)
@@ -85,12 +93,13 @@ func NewServer(cfg Config) (*Server, error) {
 	}
 
 	s := &Server{
-		cfg:      cfg,
-		db:       sqlDB,
-		repo:     repo,
-		wa:       wa,
-		sessions: sessions,
-		mux:      http.NewServeMux(),
+		cfg:            cfg,
+		db:             sqlDB,
+		repo:           repo,
+		wa:             wa,
+		sessions:       sessions,
+		trustedProxies: proxies,
+		mux:            http.NewServeMux(),
 	}
 	s.routes()
 

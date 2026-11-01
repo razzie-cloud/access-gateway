@@ -66,6 +66,10 @@ maps it into app.Config.RedisURL. Redis startup failures are fatal; no memory
 fallback exists. MemorySessions is a test double compiled only in tests.
 FORWARD_AUTH_ORIGINS (`--forward-auth-origins`) is a comma-separated allowlist of
 exact public app origins, default empty (forward authentication disabled).
+TRUSTED_PROXIES (`--trusted-proxies`) is a comma-separated list of proxy IPs or
+CIDRs, default empty. Only trusted socket peers can supply X-Forwarded-For;
+walk the chain right to left and stop at the first untrusted address. Keep
+backend ports private when trusting Docker network ranges.
 Public deployments need HTTPS, matching ORIGIN/RP_ID, and the configured ORIGIN
 must be the externally reachable origin used to generate links. Do not build
 absolute registration URLs from untrusted Host or forwarded headers.
@@ -91,7 +95,12 @@ absolute registration URLs from untrusted Host or forwarded headers.
   fragment, removes it from history, and POSTs it as JSON `linkToken`. Never
   move the bearer secret to a query string, access log, referrer, or HTMX history.
 - Link begin derives the account exclusively from the token and rejects username
-  or bootstrap-token overrides. It supplies existing credential exclusions.
+  or bootstrap-token overrides. It excludes known discoverable credentials;
+  legacy/unknown non-discoverable credentials must not block same-device upgrades.
+  New ceremonies require residentKey=required and request credProps. Keep this
+  requirement in the registration context; record successful new credentials as
+  discoverable, and reject an explicit credProps.rk=false without consuming the link.
+  Pre-upgrade registration ceremonies must restart before consuming a link.
 - Finish verifies WebAuthn first, then locks the link row FOR UPDATE. Recheck
   expiry, unused state, and user ID after acquiring the lock. Insert a new
   credential and mark the link used in the same transaction. Rollback must
@@ -111,6 +120,12 @@ absolute registration URLs from untrusted Host or forwarded headers.
 
 ## HTTP and sessions
 
+- Anonymous requests are limited to 60/minute/IP. POST login begin/finish share
+  a separate 10/minute/IP budget even with a live session. Return 429 with
+  Retry-After before allocating state. Live gateway and origin-bound app sessions
+  bypass only the anonymous budget. Process-local counters are mutex-protected,
+  expire after a minute and are bounded to 16,384 entries; reject new counters
+  when full rather than evicting live ones. Each replica has its own budget.
 - GET / and /register: full pages. GET /ui/state: account fragment.
 - GET /ui/activity: signed-in users see their own devices and sessions; admins
   also see all users/UUIDs, devices and sessions. GET /ui/admin is an admin-only
@@ -130,6 +145,14 @@ absolute registration URLs from untrusted Host or forwarded headers.
 - POST /ui/logout: clears auth and returns the signed-out fragment.
 - GET /api/bootstrap, /api/me; POST /api/register/begin, /api/register/finish,
   /api/login/begin, /api/login/finish, /api/logout: JSON API.
+- Login begin uses BeginDiscoverableLogin without any account lookup or
+  allowCredentials. Legacy username JSON fields are ignored. FinishPasskeyLogin
+  resolves the account using both credential ID and user handle and verifies the
+  assertion before completing the device-bound session. Anonymous ceremonies have
+  an empty username; CompleteLogin binds the verified account when consuming them.
+  Existing named ceremonies retain their store-level account binding, but HTTP
+  clients must restart them after upgrading. All authentication failures return
+  the same 401 message; log bounded, quoted failure metadata only on the server.
 - All POSTs require an Origin header matching configured ORIGIN. /api/ POSTs also
   require application/json. Maintain these checks when adding mutation routes.
 - Responses use no-store, no-referrer, nosniff, and a self-only CSP (QR images

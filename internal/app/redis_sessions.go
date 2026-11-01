@@ -171,7 +171,10 @@ func (s *redisSessions) DeleteSID(ctx context.Context, sid string) error {
 var finishLogin = redis.NewScript(`
 local raw = redis.call('GET', KEYS[1])
 if not raw or redis.call('PTTL', KEYS[1]) <= 0 then return 0 end
-if cjson.decode(raw).Username ~= ARGV[1] then return 0 end
+local login = cjson.decode(raw)
+-- Discoverable ceremonies are bound to an account only after signature
+-- verification. Retain the account check for older, named ceremonies.
+if login.Username ~= '' and login.Username ~= ARGV[1] then return 0 end
 if not redis.call('SET', KEYS[2], ARGV[2], 'NX', 'PX', ARGV[3]) then return 0 end
 redis.call('DEL', KEYS[1], KEYS[3])
 return 1

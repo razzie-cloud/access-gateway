@@ -18,7 +18,7 @@ func prepareConfig(t *testing.T, args ...string) {
 	t.Cleanup(func() { os.Args = originalArgs })
 	os.Args = append([]string{"access-gateway"}, args...)
 	for _, key := range []string{
-		"SERVICE_PORT", "ORIGIN", "RP_ID", "RP_NAME", "FORWARD_AUTH_ORIGINS",
+		"SERVICE_PORT", "ORIGIN", "RP_ID", "RP_NAME", "FORWARD_AUTH_ORIGINS", "TRUSTED_PROXIES",
 		"POSTGRES_URI", "POSTGRES_URI_FROM", "POSTGRES_PASSWORD_FILE",
 		"REDIS_URI", "REDIS_URI_FROM", "REDIS_PASSWORD_FILE",
 	} {
@@ -39,6 +39,7 @@ func TestLoadDefaults(t *testing.T) {
 	assert.Equal(t, "localhost", cfg.RPID)
 	assert.Equal(t, "Minimal WebAuthn", cfg.RPName)
 	assert.Empty(t, cfg.ForwardAuthOrigins)
+	assert.Empty(t, cfg.TrustedProxies)
 }
 
 func TestLoadGatewaySettings(t *testing.T) {
@@ -53,6 +54,7 @@ func TestLoadGatewaySettings(t *testing.T) {
 				{"RP_NAME", "--rp-name", "Gateway"},
 				{"FORWARD_AUTH_ORIGINS", "--forward-auth-origins", "https://app.example.com,https://other.example.net"},
 				{"REDIS_URI", "--redis-uri", "redis://sessions:6379/0"},
+				{"TRUSTED_PROXIES", "--trusted-proxies", "10.0.0.0/24,127.0.0.1"},
 			}
 			for _, v := range values {
 				if fromArgs {
@@ -73,6 +75,7 @@ func TestLoadGatewaySettings(t *testing.T) {
 			assert.Equal(t, values[4].value, cfg.RPName)
 			assert.Equal(t, values[5].value, cfg.ForwardAuthOrigins)
 			assert.Equal(t, values[6].value, cfg.RedisURI)
+			assert.Equal(t, values[7].value, cfg.TrustedProxies)
 		})
 	}
 }

@@ -11,11 +11,11 @@ import (
 
 func TestCredentialSerialization(t *testing.T) {
 	want := webauthn.Credential{
-		ID:              []byte{0, 1, 254, 255},
-		PublicKey:       []byte{10, 20, 30},
-		AttestationType: "none",
-		Transport:       []protocol.AuthenticatorTransport{protocol.Internal, protocol.USB},
-		Flags:           webauthn.CredentialFlags{UserPresent: true, UserVerified: true, BackupEligible: true, BackupState: true},
+		ID:                []byte{0, 1, 254, 255},
+		PublicKey:         []byte{10, 20, 30},
+		AttestationFormat: "none",
+		Transport:         []protocol.AuthenticatorTransport{protocol.Internal, protocol.USB},
+		Flags:             webauthn.CredentialFlags{UserPresent: true, UserVerified: true, BackupEligible: true, BackupState: true},
 		Authenticator: webauthn.Authenticator{
 			AAGUID:       []byte{1, 2, 3},
 			SignCount:    42,
@@ -35,6 +35,17 @@ func TestCredentialSerialization(t *testing.T) {
 	got, err := unmarshalCredential(data)
 	require.NoError(t, err)
 	assert.Equal(t, want, got, "credential changed after storage round trip")
+}
+
+func TestLegacyCredentialAttestationFormatMigration(t *testing.T) {
+	// v0.12 stored the attestation format in attestationType. The new library
+	// migrates it on JSON decode without changing credential identity or keys.
+	c, err := unmarshalCredential([]byte(`{"id":"AQID","publicKey":"BAUG","attestationType":"packed"}`))
+	require.NoError(t, err)
+	assert.Equal(t, []byte{1, 2, 3}, c.ID)
+	assert.Equal(t, []byte{4, 5, 6}, c.PublicKey)
+	assert.Equal(t, "packed", c.AttestationFormat)
+	assert.Empty(t, c.AttestationType)
 }
 
 func TestUnmarshalCredentialRejectsInvalidData(t *testing.T) {

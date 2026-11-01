@@ -21,6 +21,7 @@ import (
 )
 
 func (s *Server) routes() {
+	s.limits = newRequestLimits()
 	s.mux.HandleFunc("/forward_auth", s.handleForwardAuth)
 	s.mux.HandleFunc("/auth/authorize", s.handleAuthorize)
 	s.mux.Handle("/static/", http.FileServer(http.FS(web.Assets)))
@@ -133,6 +134,7 @@ func (s *Server) handleRegisterBegin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	registration.DeviceName = req.DeviceName
+	registration.DiscoverableRequired = true
 	waUser := WebAuthnUser{User: registration.User}
 	if registration.LinkHash != "" {
 		waUser, err = s.loadWebAuthnUser(ctx, registration.User)
@@ -143,9 +145,17 @@ func (s *Server) handleRegisterBegin(w http.ResponseWriter, r *http.Request) {
 	}
 	exclusions := make([]protocol.CredentialDescriptor, 0, len(waUser.Creds))
 	for _, credential := range waUser.Creds {
-		exclusions = append(exclusions, credential.Descriptor())
+		// Legacy credentials did not record discoverability. Do not block
+		// upgrading one to a discoverable credential on the same authenticator.
+		if credential.Extensions.RK != nil && *credential.Extensions.RK {
+			exclusions = append(exclusions, credential.Descriptor())
+		}
 	}
-	opts, sd, err := s.wa.BeginRegistration(waUser, webauthn.WithExclusions(exclusions))
+	opts, sd, err := s.wa.BeginRegistration(waUser,
+		webauthn.WithExclusions(exclusions),
+		webauthn.WithResidentKeyRequirement(protocol.ResidentKeyRequirementRequired),
+		webauthn.WithExtensions(webauthn.WithExtensionCredProps()),
+	)
 	if err != nil {
 		writeJSON(w, 500, map[string]string{"error": "webauthn error"})
 		return
@@ -178,6 +188,12 @@ func (s *Server) handleRegisterFinish(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]string{"error": "registration session expired"})
 		return
 	}
+	if !registration.DiscoverableRequired {
+		// A pre-upgrade prompt may have requested a non-discoverable key.
+		// Restart before consuming its still-valid enrollment authorization.
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "registration requirements changed; start registration again"})
+		return
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 	waUser := WebAuthnUser{User: registration.User}
@@ -193,6 +209,14 @@ func (s *Server) handleRegisterFinish(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]string{"error": "webauthn finish failed"})
 		return
 	}
+	if credential.Extensions.RK != nil && !*credential.Extensions.RK {
+		writeJSON(w, 400, map[string]string{"error": "a discoverable passkey is required"})
+		return
+	}
+	// Older clients may omit credProps even though residentKey=required
+	// succeeded. Remember the requirement for future exclusion lists.
+	discoverable := true
+	credential.Extensions.RK = &discoverable
 	if err := s.completeRegistration(ctx, registration, credential); err != nil {
 		if errors.Is(err, errRegistrationUnavailable) {
 			writeJSON(w, 409, map[string]string{"error": "registration link expired, used, or bootstrap already completed"})
@@ -211,7 +235,17 @@ func (s *Server) handleRegisterFinish(w http.ResponseWriter, r *http.Request) {
 }
 
 type loginBeginReq struct {
+	// Accepted for older clients, but never used to look up an account.
 	Username string `json:"username"`
+}
+
+const loginFailureMessage = "sign-in failed; check your passkey and try again"
+
+func (s *Server) rejectLogin(w http.ResponseWriter, r *http.Request, username, reason string) {
+	// Quote and bound attacker-controlled names. Never log bearer cookies,
+	// challenges, signatures, bootstrap tokens or registration links.
+	log.Printf("login failed ip=%q username=%q reason=%q", s.clientIP(r).String(), username[:min(len(username), 64)], reason)
+	writeJSON(w, http.StatusUnauthorized, map[string]string{"error": loginFailureMessage})
 }
 
 func (s *Server) handleLoginBegin(w http.ResponseWriter, r *http.Request) {
@@ -225,43 +259,16 @@ func (s *Server) handleLoginBegin(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]string{"error": "bad json"})
 		return
 	}
-	req.Username = strings.TrimSpace(req.Username)
-	if req.Username == "" {
-		writeJSON(w, 400, map[string]string{"error": "missing username"})
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
-	defer cancel()
-
-	u, err := s.getUserByUsername(ctx, req.Username)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			writeJSON(w, 404, map[string]string{"error": "user not found"})
-			return
-		}
-		writeJSON(w, 500, map[string]string{"error": "db error"})
-		return
-	}
-
-	waUser, err := s.loadWebAuthnUser(ctx, u)
-	if err != nil {
-		writeJSON(w, 500, map[string]string{"error": "db error"})
-		return
-	}
-	if len(waUser.Creds) == 0 {
-		writeJSON(w, 400, map[string]string{"error": "no credentials"})
-		return
-	}
-
-	opts, sessionData, err := s.wa.BeginLogin(waUser, webauthn.WithUserVerification(protocol.VerificationPreferred))
+	// No account lookup, account-specific options, or timing difference between
+	// existing and missing names. The authenticator selects the account.
+	opts, sessionData, err := s.wa.BeginDiscoverableLogin(webauthn.WithUserVerification(protocol.VerificationPreferred))
 	if err != nil {
 		writeJSON(w, 500, map[string]string{"error": "webauthn error"})
 		return
 	}
 
 	sid := newSID()
-	if err := s.sessions.PutLogin(r.Context(), sid, req.Username, *sessionData); err != nil {
+	if err := s.sessions.PutLogin(r.Context(), sid, "", *sessionData); err != nil {
 		writeJSON(w, 503, map[string]string{"error": "session storage unavailable"})
 		return
 	}
@@ -277,37 +284,47 @@ func (s *Server) handleLoginFinish(w http.ResponseWriter, r *http.Request) {
 	}
 	sid, err := r.Cookie("sid")
 	if err != nil || sid.Value == "" {
-		writeJSON(w, 400, map[string]string{"error": "missing sid"})
+		s.rejectLogin(w, r, "", "missing ceremony cookie")
 		return
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 
-	username, sd, ok, err := s.sessions.GetLogin(ctx, sid.Value)
+	_, sd, ok, err := s.sessions.GetLogin(ctx, sid.Value)
 	if err != nil {
 		writeJSON(w, 503, map[string]string{"error": "session storage unavailable"})
 		return
 	}
 	if !ok {
-		writeJSON(w, 400, map[string]string{"error": "login session expired"})
+		s.rejectLogin(w, r, "", "ceremony expired or missing")
 		return
 	}
 
-	u, err := s.getUserByUsername(ctx, username)
+	var u User
+	var lookupErr error
+	_, cred, err := s.wa.FinishPasskeyLogin(func(rawID, userHandle []byte) (webauthn.User, error) {
+		if len(userHandle) != 16 {
+			return nil, sql.ErrNoRows
+		}
+		// Resolve both account and credential, then let WebAuthn verify the
+		// user handle, challenge, RP/origin, flags and signature before login.
+		lookupErr = s.db.QueryRowContext(ctx, `SELECT u.id,u.username,u.is_admin,u.created_at
+ FROM users u JOIN webauthn_credentials c ON c.user_id=u.id
+ WHERE u.id=$1 AND c.credential_id=$2`, userHandle, rawID).Scan(&u.ID, &u.Username, &u.IsAdmin, &u.CreatedAt)
+		if lookupErr != nil {
+			return nil, lookupErr
+		}
+		var user WebAuthnUser
+		user, lookupErr = s.loadWebAuthnUser(ctx, u)
+		return user, lookupErr
+	}, sd, r)
 	if err != nil {
-		writeJSON(w, 400, map[string]string{"error": "unknown user"})
-		return
-	}
-	waUser, err := s.loadWebAuthnUser(ctx, u)
-	if err != nil {
-		writeJSON(w, 500, map[string]string{"error": "db error"})
-		return
-	}
-
-	cred, err := s.wa.FinishLogin(waUser, sd, r)
-	if err != nil {
-		writeJSON(w, 401, map[string]string{"error": "webauthn login failed"})
+		if lookupErr != nil && !errors.Is(lookupErr, sql.ErrNoRows) {
+			writeJSON(w, 503, map[string]string{"error": "unable to sign in; try again later"})
+		} else {
+			s.rejectLogin(w, r, u.Username, "invalid assertion or unknown credential")
+		}
 		return
 	}
 
@@ -319,14 +336,14 @@ func (s *Server) handleLoginFinish(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, errSessionStore) {
 			writeJSON(w, 503, map[string]string{"error": "session storage unavailable"})
 		} else if errors.Is(err, sql.ErrNoRows) {
-			writeJSON(w, 401, map[string]string{"error": "device no longer registered"})
+			s.rejectLogin(w, r, u.Username, "device removed")
 		} else {
 			writeJSON(w, 500, map[string]string{"error": "failed to complete login"})
 		}
 		return
 	}
 	if !ok {
-		writeJSON(w, 400, map[string]string{"error": "login session expired or already used"})
+		s.rejectLogin(w, r, u.Username, "ceremony expired or consumed")
 		return
 	}
 

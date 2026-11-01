@@ -41,8 +41,25 @@ code, name the device and create its passkey. The QR image can also be downloade
 
 Each link registers one passkey for its designated account and expires at the
 displayed time, even if registration is already in progress. A canceled prompt
-can be retried while the link remains valid. After registration, sign in with
-the account's username. Multiple devices can have separate passkeys.
+can be retried while the link remains valid. After registration, choose
+**Sign in with a passkey** and select the account on your authenticator.
+Multiple devices can have separate passkeys.
+
+Login requires a **discoverable passkey** and does not ask for a username.
+Every login-begin response has the same account-independent options, without
+credential IDs or account lookups. Failed assertions return the same 401
+message; the server logs the client IP, a bounded account name when known, and
+a reason, never cookies or enrollment secrets.
+
+New registrations request `residentKey=required`. Before upgrading an existing
+installation, generate a registration link while still signed in if your old
+credential is non-discoverable. Use it after upgrading to enroll a discoverable
+passkey. Existing links remain valid until their original expiry; live gateway
+and app sessions are preserved. In-progress login and registration ceremonies
+must be restarted. Legacy credentials with unknown discoverability are omitted from
+enrollment exclusions so the same authenticator can be upgraded. Already
+discoverable credentials can continue signing in. Pre-FIDO2 security keys and
+authenticators without available discoverable storage cannot enroll.
 
 Treat links and QR codes like credentials: anyone holding one can register a
 device for that account. Share them privately and use a separate link per device.
@@ -75,6 +92,26 @@ live, their account's devices remain protected from removal. End the older
 sessions from a new sign-in to identify and manage individual devices.
 
 ## Operational notes
+
+Anonymous requests are limited to **60 per minute per IP**. Login begin and
+finish requests share a separate **10 per minute per IP** budget, including
+requests from signed-in users. Excess requests receive **429** and a
+`Retry-After` header before allocating ceremonies or SSO flows. Live gateway
+and origin-bound app sessions bypass the anonymous budget. Counters use bounded
+process-local memory (at most 16,384 entries), expire automatically, and reset
+on restart; replicas have independent budgets. A distributed attacker can still
+consume the global SSO capacity, so these limits do not replace ingress controls.
+
+By default the socket peer is the client IP; supplied IP headers are ignored.
+Behind a reverse proxy, set `TRUSTED_PROXIES` (`--trusted-proxies`) to a
+comma-separated list of its IP addresses or CIDRs. Only trusted socket peers
+may supply `X-Forwarded-For`; the chain is read from right to left, stopping at
+the first untrusted hop. For example, a loopback proxy can use
+`TRUSTED_PROXIES=127.0.0.1,::1`. Restrict backend access and keep these ranges as
+narrow as possible. Otherwise clients share the proxy's rate-limit budget.
+The parent Compose/Swarm configurations trust private Docker network ranges
+because the gateway backend has no published port. Do not use that broader
+setting for a directly exposed gateway.
 
 PostgreSQL stores users, passkeys, and registration links; migrations run at
 startup. Redis stores gateway and app sessions, passkey ceremonies, pending SSO

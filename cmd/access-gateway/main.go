@@ -24,6 +24,7 @@ func main() {
 		RPID:               cfg.RPID,
 		RPName:             cfg.RPName,
 		ForwardAuthOrigins: strings.FieldsFunc(cfg.ForwardAuthOrigins, func(r rune) bool { return r == ',' }),
+		TrustedProxies:     strings.FieldsFunc(cfg.TrustedProxies, func(r rune) bool { return r == ',' }),
 	})
 	if err != nil {
 		log.Fatalf("server init: %v", err)

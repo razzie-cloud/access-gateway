@@ -18,10 +18,11 @@ var errRegistrationUnavailable = errors.New("registration unavailable")
 
 // Only hashes are retained in server-side registration sessions and PostgreSQL.
 type registrationContext struct {
-	User          User
-	LinkHash      string
-	BootstrapHash string
-	DeviceName    string
+	User                 User
+	LinkHash             string
+	BootstrapHash        string
+	DeviceName           string
+	DiscoverableRequired bool
 }
 
 func hashToken(token string) string {

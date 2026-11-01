@@ -57,8 +57,6 @@ func TestBeginRejectsInvalidInput(t *testing.T) {
 		{"missing bootstrap token", "/api/register/begin", `{"username":"alice"}`, "username and bootstrap token required"},
 		{"malformed login", "/api/login/begin", `{`, "bad json"},
 		{"unknown login field", "/api/login/begin", `{"username":"alice","unexpected":true}`, "bad json"},
-		{"empty login", "/api/login/begin", `{}`, "missing username"},
-		{"blank login", "/api/login/begin", `{"username":" \t\n"}`, "missing username"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s := unitServer()
@@ -94,7 +92,12 @@ func TestFinishRequiresLiveCeremony(t *testing.T) {
 				}
 				w := httptest.NewRecorder()
 				s.handler().ServeHTTP(w, r)
-				assert.Equal(t, http.StatusBadRequest, w.Code)
+				wantStatus := http.StatusBadRequest
+				if ceremony == "login" {
+					wantStatus = http.StatusUnauthorized
+					assert.JSONEq(t, `{"error":"`+loginFailureMessage+`"}`, w.Body.String())
+				}
+				assert.Equal(t, wantStatus, w.Code)
 				assert.Empty(t, testMemory(s).auth, "rejected finish issued an auth session")
 				assert.Empty(t, w.Result().Cookies(), "rejected finish issued a cookie")
 			})
@@ -196,6 +199,10 @@ func TestCeremonyTypesCannotBeInterchanged(t *testing.T) {
 		r.AddCookie(&http.Cookie{Name: "sid", Value: tc.sid})
 		w := httptest.NewRecorder()
 		s.handler().ServeHTTP(w, r)
-		assert.Equal(t, http.StatusBadRequest, w.Code, "%s with %s", tc.path, tc.sid)
+		wantStatus := http.StatusBadRequest
+		if tc.path == "/api/login/finish" {
+			wantStatus = http.StatusUnauthorized
+		}
+		assert.Equal(t, wantStatus, w.Code, "%s with %s", tc.path, tc.sid)
 	}
 }
