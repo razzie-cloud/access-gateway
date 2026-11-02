@@ -28,7 +28,8 @@ hostname (`auth.example.com`). Use the same origin when opening registration lin
 
 ## Set up the administrator
 
-On the first start with no users, find `BOOTSTRAP TOKEN` in the gateway logs.
+On the first start with no users, find the `bootstrap.token_created` event in the gateway logs and read its
+`bootstrap_token` attribute.
 Open the home page, enter a username, that token and a device name, and complete the passkey
 prompt. Then sign in. The first account is the administrator; existing
 installations promote their earliest account during migration.
@@ -65,11 +66,12 @@ enumeration, but exposing real credential IDs still has privacy limits: known
 IDs, authenticator-specific ID formats, changes over time and timing differences
 can provide clues. See the [WebAuthn privacy considerations](https://www.w3.org/TR/webauthn-3/#sctn-username-enumeration).
 
-Each valid username submission logs `login attempt` with the client IP and a
+Each valid username submission logs `login.attempted` with the client IP and a
 bounded, quoted `claimed_username`, even if the browser prompt is canceled or
-the account does not exist. Failed verification logs the same claimed name and
+the account does not exist. Failed verification emits `login.rejected` with the same claimed name and
 a reason, while clients always receive the same 401 message. A claimed username
-is unverified input. Cookies, assertions and enrollment secrets are never logged.
+is unverified input. Cookies, assertions and registration links are never logged. The one-time
+bootstrap event described above is the only credential-bearing log.
 
 New registrations still request `residentKey=required`; pre-FIDO2 security keys
 and authenticators without available discoverable storage cannot enroll.
@@ -303,8 +305,37 @@ after each cycle, with a two-second deadline per dependency. Until the first
 successful cycle, after a failed cycle, or once the last result is thirty seconds
 old, readiness returns 503. Probes only read cached state; they never query a
 backend, provision an instance, or generate request logs. Failed background
-checks log the dependency name once per failed cycle without raw backend errors.
+checks log dependency failure and recovery transitions without raw backend errors.
 
 Use these endpoints directly on the private backend port. Keep public ingress
 and authentication rules in place. Container health checks use `/readyz` on
 `SERVICE_PORT` (default 8080).
+
+## Logging
+
+Logs are JSON records written to stderr using Go's `log/slog`. Each record has
+`time`, `level`, `msg`, `service`, and a stable `event` name. `LOG_LEVEL` controls
+verbosity independently of service configuration: `DEBUG`, `INFO` (default),
+`WARN`, or `ERROR`, case-insensitive. Invalid values fail startup.
+
+Operational failures include a generated `request_id` (also returned as
+`X-Request-ID`), method, static route template, status, duration in milliseconds,
+operation, and a safe `error_kind`. Known database errors include their SQLSTATE;
+raw backend error messages and SQL are excluded. Request URLs, query strings,
+cookies, bodies, credentials, and panic values are not logged. Panic diagnostics
+include code locations only.
+
+Routine requests are quiet at INFO. DEBUG enables request summaries; static
+assets and health probes remain quiet. Dependency outages emit one
+`dependency.unavailable` WARN and a `dependency.recovered` INFO with outage
+duration, rather than repeating a warning every probe cycle. Normal canceled
+requests and interrupted client downloads are DEBUG events.
+
+Authentication and administrative changes produce INFO events, including
+successful sign-in, user creation, enrollment, registration-link issuance,
+logout, and session/device revocation. Login rejections are WARN; device renames
+are DEBUG. Account claims are bounded to 64 bytes and JSON-escaped. These logs do
+not identify whether a rejected claimed account exists. The existing one-time
+bootstrap credential is retained in `bootstrap.token_created` at WARN even with
+`LOG_LEVEL=ERROR`, so first-user setup remains possible. Retain access controls
+on service logs.

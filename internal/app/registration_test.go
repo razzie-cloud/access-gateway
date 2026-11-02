@@ -112,6 +112,10 @@ func postgresServer(t *testing.T) *Server {
 	redisStore := testRedisSessions(t, "")
 	s, err := NewServer(Config{DatabaseURL: uri.String(), RedisURL: os.Getenv("TEST_REDIS_URL"), Origin: "https://auth.example", RPID: "auth.example", RPName: "Test"})
 	require.NoError(t, err)
+	// The monitor belongs to the original Redis client. Stop it before
+	// replacing that client with the test's isolated namespace.
+	s.stopHealth()
+	s.stopHealth = nil
 	require.NoError(t, s.sessions.Close())
 	s.sessions = redisStore
 	t.Cleanup(func() { _ = s.db.Close() })
@@ -301,9 +305,12 @@ func TestPostgresBootstrapRetryAndRace(t *testing.T) {
 
 func TestPostgresExistingUserUpgrade(t *testing.T) {
 	s := postgresServer(t)
-	require.NoError(t, goose.DownTo(s.db, "migrations", 1))
+	provider, err := goose.NewProvider(goose.DialectPostgres, s.db, os.DirFS("../db/migrations"), goose.WithLogger(goose.NopLogger()))
+	require.NoError(t, err)
+	_, err = provider.DownTo(t.Context(), 1)
+	require.NoError(t, err)
 	first, second := uuid.New(), uuid.New()
-	_, err := s.db.Exec(`INSERT INTO users(id,username,created_at) VALUES($1,'original',1),($2,'later',2)`, first[:], second[:])
+	_, err = s.db.Exec(`INSERT INTO users(id,username,created_at) VALUES($1,'original',1),($2,'later',2)`, first[:], second[:])
 	require.NoError(t, err)
 	require.NoError(t, gatewaydb.RunMigrations(s.db))
 	original, err := s.getUserByUsername(context.Background(), "original")
@@ -317,7 +324,10 @@ func TestPostgresExistingUserUpgrade(t *testing.T) {
 func TestPostgresExistingDeviceUpgrade(t *testing.T) {
 	s := postgresServer(t)
 	user := addUser(t, s, "existing-user", false)
-	require.NoError(t, goose.DownTo(s.db, "migrations", 2))
+	provider, err := goose.NewProvider(goose.DialectPostgres, s.db, os.DirFS("../db/migrations"), goose.WithLogger(goose.NopLogger()))
+	require.NoError(t, err)
+	_, err = provider.DownTo(t.Context(), 2)
+	require.NoError(t, err)
 	credential := &webauthn.Credential{ID: []byte("existing-device")}
 	data, err := marshalCredential(credential)
 	require.NoError(t, err)

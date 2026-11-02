@@ -4,13 +4,15 @@ import (
 	"mime"
 	"net/http"
 	"strings"
+
+	"github.com/razzie-cloud/access-gateway/internal/logging"
 )
 
 func (s *Server) handler() http.Handler {
 	if s.limits == nil {
 		s.limits = newRequestLimits()
 	}
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return logging.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -36,7 +38,7 @@ func (s *Server) handler() http.Handler {
 			r.Body = http.MaxBytesReader(w, r.Body, 2<<20)
 		}
 		s.mux.ServeHTTP(w, r)
-	})
+	}))
 }
 
 func (s *Server) setCookie(w http.ResponseWriter, name, value string, maxAge int) {

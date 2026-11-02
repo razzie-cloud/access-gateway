@@ -5,7 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"html/template"
-	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/razzie-cloud/access-gateway/internal/logging"
 	"github.com/razzie-cloud/access-gateway/internal/web"
 	"github.com/skip2/go-qrcode"
 )
@@ -39,10 +40,11 @@ type adminUser struct {
 	UUID string
 }
 
-func render(w http.ResponseWriter, status int, name string, data viewData) {
+func render(w http.ResponseWriter, r *http.Request, status int, name string, data viewData) {
 	var buf bytes.Buffer
 	if err := templates.ExecuteTemplate(&buf, name, data); err != nil {
-		log.Printf("render %s: %v", name, err)
+		logging.Fields(r.Context(), "template", name)
+		logging.Fail(r.Context(), slog.LevelError, "render_template", err)
 		http.Error(w, "Unable to render page", 500)
 		return
 	}
@@ -83,14 +85,15 @@ func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 	user, err := s.currentUser(r)
 	if err != nil {
 		if errors.Is(err, errSessionStore) {
-			render(w, 503, "message", viewData{Error: "Session storage unavailable"})
+			logging.Fail(r.Context(), slog.LevelError, "redis", err)
+			render(w, r, 503, "message", viewData{Error: "Session storage unavailable"})
 			return
 		}
-		render(w, 401, "message", viewData{Error: "Sign in first"})
+		render(w, r, 401, "message", viewData{Error: "Sign in first"})
 		return
 	}
 	if !user.IsAdmin {
-		render(w, 403, "message", viewData{Error: "Administrator access required"})
+		render(w, r, 403, "message", viewData{Error: "Administrator access required"})
 		return
 	}
 	s.renderActivity(w, r, user, "")
@@ -114,7 +117,7 @@ func (s *Server) handlePage(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	render(w, 200, "page", data)
+	render(w, r, 200, "page", data)
 }
 
 func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
@@ -124,10 +127,11 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	}
 	data, err := s.state(r)
 	if err != nil {
-		render(w, 500, "message", viewData{Error: "Unable to load account"})
+		logging.Fail(r.Context(), slog.LevelError, "application", err)
+		render(w, r, 500, "message", viewData{Error: "Unable to load account"})
 		return
 	}
-	render(w, 200, "state", data)
+	render(w, r, 200, "state", data)
 }
 
 func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
@@ -138,23 +142,24 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 	user, err := s.currentUser(r)
 	if err != nil {
 		if errors.Is(err, errSessionStore) {
-			render(w, 503, "message", viewData{Error: "Session storage unavailable"})
+			logging.Fail(r.Context(), slog.LevelError, "redis", err)
+			render(w, r, 503, "message", viewData{Error: "Session storage unavailable"})
 			return
 		}
-		render(w, 401, "message", viewData{Error: "Sign in first"})
+		render(w, r, 401, "message", viewData{Error: "Sign in first"})
 		return
 	}
 	if !user.IsAdmin {
-		render(w, 403, "message", viewData{Error: "Administrator access required"})
+		render(w, r, 403, "message", viewData{Error: "Administrator access required"})
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		render(w, 400, "message", viewData{Error: "Invalid form"})
+		render(w, r, 400, "message", viewData{Error: "Invalid form"})
 		return
 	}
 	username := strings.TrimSpace(r.FormValue("username"))
 	if !validUsername(username) {
-		render(w, 400, "message", viewData{Error: "Username must contain 1–64 bytes"})
+		render(w, r, 400, "message", viewData{Error: "Username must contain 1–64 bytes"})
 		return
 	}
 	id := uuid.New()
@@ -162,21 +167,24 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			render(w, 409, "message", viewData{Error: "That username already exists"})
+			render(w, r, 409, "message", viewData{Error: "That username already exists"})
 		} else {
-			render(w, 500, "message", viewData{Error: "Unable to create user"})
+			logging.Fail(r.Context(), slog.LevelError, "application", err)
+			render(w, r, 500, "message", viewData{Error: "Unable to create user"})
 		}
 		return
 	}
+	logging.For(r.Context()).Info("User created", "event", "user.created", "actor_user_id", userID(user.ID), "target_user_id", id.String())
 	// Refresh the account selector so the administrator can immediately issue a link.
 	data, err := s.state(r)
 	if err != nil {
-		render(w, 500, "message", viewData{Error: "User created, but unable to refresh accounts. Reload the page."})
+		logging.Fail(r.Context(), slog.LevelError, "application", err)
+		render(w, r, 500, "message", viewData{Error: "User created, but unable to refresh accounts. Reload the page."})
 		return
 	}
 	data.Message = "User created. Choose them under Device registration links to generate their first link."
 	w.Header().Set("HX-Retarget", "#content")
-	render(w, 200, "state", data)
+	render(w, r, 200, "state", data)
 }
 
 func (s *Server) handleCreateLink(w http.ResponseWriter, r *http.Request) {
@@ -187,24 +195,25 @@ func (s *Server) handleCreateLink(w http.ResponseWriter, r *http.Request) {
 	actor, err := s.currentUser(r)
 	if err != nil {
 		if errors.Is(err, errSessionStore) {
-			render(w, 503, "message", viewData{Error: "Session storage unavailable"})
+			logging.Fail(r.Context(), slog.LevelError, "redis", err)
+			render(w, r, 503, "message", viewData{Error: "Session storage unavailable"})
 			return
 		}
-		render(w, 401, "message", viewData{Error: "Sign in first"})
+		render(w, r, 401, "message", viewData{Error: "Sign in first"})
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		render(w, 400, "message", viewData{Error: "Invalid form"})
+		render(w, r, 400, "message", viewData{Error: "Invalid form"})
 		return
 	}
 	minutes, err := strconv.Atoi(r.FormValue("minutes"))
 	if err != nil {
-		render(w, 400, "message", viewData{Error: "Enter expiration in whole minutes"})
+		render(w, r, 400, "message", viewData{Error: "Enter expiration in whole minutes"})
 		return
 	}
 	lifetime, err := linkLifetime(minutes)
 	if err != nil {
-		render(w, 400, "message", viewData{Error: err.Error()})
+		render(w, r, 400, "message", viewData{Error: err.Error()})
 		return
 	}
 	target := strings.TrimSpace(r.FormValue("username"))
@@ -212,33 +221,37 @@ func (s *Server) handleCreateLink(w http.ResponseWriter, r *http.Request) {
 		target = actor.Username
 	}
 	if target != actor.Username && !actor.IsAdmin {
-		render(w, 403, "message", viewData{Error: "You can only register your own devices"})
+		render(w, r, 403, "message", viewData{Error: "You can only register your own devices"})
 		return
 	}
 	user, err := s.getUserByUsername(r.Context(), target)
 	if err != nil {
-		render(w, 404, "message", viewData{Error: "User not found"})
+		render(w, r, 404, "message", viewData{Error: "User not found"})
 		return
 	}
 	token, err := randomToken()
 	if err != nil {
-		render(w, 500, "message", viewData{Error: "Unable to generate link"})
+		logging.Fail(r.Context(), slog.LevelError, "application", err)
+		render(w, r, 500, "message", viewData{Error: "Unable to generate link"})
 		return
 	}
 	link := strings.TrimRight(s.cfg.Origin, "/") + "/register#" + token
 	png, err := qrcode.Encode(link, qrcode.Medium, 320)
 	if err != nil {
-		render(w, 500, "message", viewData{Error: "Unable to generate QR code"})
+		logging.Fail(r.Context(), slog.LevelError, "application", err)
+		render(w, r, 500, "message", viewData{Error: "Unable to generate QR code"})
 		return
 	}
 	expires := time.Now().Add(lifetime)
 	_, err = s.db.ExecContext(r.Context(), `INSERT INTO registration_links(token_hash,user_id,expires_at,created_at) VALUES($1,$2,$3,$4)`, hashToken(token), user.ID, expires.Unix(), time.Now().Unix())
 	if err != nil {
-		render(w, 500, "message", viewData{Error: "Unable to save registration link"})
+		logging.Fail(r.Context(), slog.LevelError, "application", err)
+		render(w, r, 500, "message", viewData{Error: "Unable to save registration link"})
 		return
 	}
+	logging.For(r.Context()).Info("Registration link issued", "event", "registration_link.issued", "actor_user_id", userID(actor.ID), "target_user_id", userID(user.ID), "expires_at", expires.UTC())
 	// QR bytes come from our encoder, never from user-supplied HTML or URLs.
-	render(w, 200, "link", viewData{User: &user, Link: link, QR: template.URL("data:image/png;base64," + base64.StdEncoding.EncodeToString(png)), Expires: expires.UTC().Format(time.RFC1123)})
+	render(w, r, 200, "link", viewData{User: &user, Link: link, QR: template.URL("data:image/png;base64," + base64.StdEncoding.EncodeToString(png)), Expires: expires.UTC().Format(time.RFC1123)})
 }
 
 func (s *Server) handleUILogout(w http.ResponseWriter, r *http.Request) {
@@ -248,8 +261,12 @@ func (s *Server) handleUILogout(w http.ResponseWriter, r *http.Request) {
 	}
 	if cookie, err := r.Cookie("auth"); err == nil {
 		if err := s.sessions.DeleteAuth(r.Context(), cookie.Value); err != nil {
-			render(w, 503, "message", viewData{Error: "Unable to sign out; try again"})
+			logging.Fail(r.Context(), slog.LevelError, "application", err)
+			render(w, r, 503, "message", viewData{Error: "Unable to sign out; try again"})
 			return
+		}
+		if cookie.Value != "" {
+			logging.For(r.Context()).Info("Logout completed", "event", "logout.completed")
 		}
 	}
 	s.setCookie(w, "auth", "", -1)
@@ -259,8 +276,9 @@ func (s *Server) handleUILogout(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleStateAfterLogout(w http.ResponseWriter, r *http.Request) {
 	n, err := s.countUsers(r.Context())
 	if err != nil {
-		render(w, 500, "message", viewData{Error: "Unable to load account"})
+		logging.Fail(r.Context(), slog.LevelError, "application", err)
+		render(w, r, 500, "message", viewData{Error: "Unable to load account"})
 		return
 	}
-	render(w, 200, "state", viewData{NeedsRegistration: n == 0})
+	render(w, r, 200, "state", viewData{NeedsRegistration: n == 0})
 }

@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"log"
+	"log/slog"
 	"net/http/httptest"
 	"strings"
 	"sync/atomic"
@@ -62,9 +62,9 @@ func TestProbeContract(t *testing.T) {
 func TestCachedChecksFailureRecoveryAndLogging(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		var logs bytes.Buffer
-		old := log.Writer()
-		log.SetOutput(&logs)
-		defer log.SetOutput(old)
+		old := slog.Default()
+		slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, nil)))
+		defer slog.SetDefault(old)
 		var fail atomic.Bool
 		var calls atomic.Int32
 		m := New(Check{Name: "postgres", Ping: func(context.Context) error {
@@ -91,7 +91,7 @@ func TestCachedChecksFailureRecoveryAndLogging(t *testing.T) {
 		if probe(m, "GET", "/readyz").Code != 503 || probe(m, "GET", "/healthz").Code != 200 {
 			t.Fatal("dependency failure must affect readiness only")
 		}
-		if !strings.Contains(logs.String(), "health check failed: postgres") || strings.Contains(logs.String(), "secret-backend-uri") {
+		if !strings.Contains(logs.String(), `"event":"dependency.unavailable"`) || strings.Contains(logs.String(), "secret-backend-uri") {
 			t.Fatalf("unsafe or missing error log: %s", &logs)
 		}
 		logs.Reset()
@@ -101,11 +101,16 @@ func TestCachedChecksFailureRecoveryAndLogging(t *testing.T) {
 		if logs.Len() != 0 || calls.Load() != 2 {
 			t.Fatal("failed probes generated request-dependent work")
 		}
+		time.Sleep(interval * 3)
+		synctest.Wait()
+		if logs.Len() != 0 {
+			t.Fatalf("outage was logged repeatedly: %s", &logs)
+		}
 		fail.Store(false)
 		time.Sleep(interval)
 		synctest.Wait()
-		if probe(m, "HEAD", "/readyz").Code != 200 || logs.Len() != 0 {
-			t.Fatal("recovery did not restore quiet readiness")
+		if probe(m, "HEAD", "/readyz").Code != 200 || !strings.Contains(logs.String(), `"event":"dependency.recovered"`) || !strings.Contains(logs.String(), `"outage_duration_ms":40000`) {
+			t.Fatal("recovery did not restore readiness and log outage duration")
 		}
 		stop()
 		if probe(m, "GET", "/readyz").Code != 503 {

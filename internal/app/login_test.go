@@ -9,7 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -32,9 +32,9 @@ func TestPostgresLoginBeginFiltersAndPadsAccounts(t *testing.T) {
 	addDevice(t, s, bob, "Other")
 	addDevice(t, s, bob, "Much longer credential ID")
 	var output bytes.Buffer
-	previous := log.Writer()
-	log.SetOutput(&output)
-	t.Cleanup(func() { log.SetOutput(previous) })
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&output, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
 	var reference map[string]any
 	lists := map[string][]protocol.CredentialDescriptor{}
 	seen := make(map[string]bool)
@@ -93,7 +93,7 @@ func TestPostgresLoginBeginFiltersAndPadsAccounts(t *testing.T) {
 			assert.Equal(t, alice.ID, sd.UserID)
 			assert.Equal(t, [][]byte{aliceKey.ID}, sd.AllowedCredentialIDs)
 		}
-		assert.Contains(t, output.String(), `login attempt ip="192.0.2.1" claimed_username="`+name+`"`)
+		assert.Contains(t, output.String(), `"claimed_username":"`+name+`"`)
 		assert.NotContains(t, output.String(), challenge)
 		assert.NotContains(t, output.String(), cookies[0].Value)
 	}
@@ -228,9 +228,9 @@ func TestPostgresNamedLoginAccountBindingAndOptionalHandle(t *testing.T) {
 	credential, key, _ := signingDevice(t, s, alice)
 	signingDevice(t, s, bob)
 	var output bytes.Buffer
-	previous := log.Writer()
-	log.SetOutput(&output)
-	t.Cleanup(func() { log.SetOutput(previous) })
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&output, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
 	for _, tc := range []struct {
 		username string
 		handle   []byte
@@ -254,7 +254,7 @@ func TestPostgresNamedLoginAccountBindingAndOptionalHandle(t *testing.T) {
 		if tc.status == 401 {
 			assert.JSONEq(t, `{"error":"`+loginFailureMessage+`"}`, w.Body.String())
 			assert.Empty(t, w.Result().Cookies())
-			assert.Contains(t, output.String(), `login failed ip="192.0.2.1" claimed_username="`+tc.username+`"`)
+			assert.Contains(t, output.String(), `"claimed_username":"`+tc.username+`"`)
 		}
 		assert.NotContains(t, output.String(), body)
 		assert.NotContains(t, output.String(), sid)
@@ -282,16 +282,16 @@ func TestLoginFailureLogsClaimedUsername(t *testing.T) {
 	s.wa, err = webauthn.New(&webauthn.Config{RPID: "auth.example", RPOrigins: []string{s.cfg.Origin}})
 	require.NoError(t, err)
 	var output bytes.Buffer
-	previous := log.Writer()
-	log.SetOutput(&output)
-	t.Cleanup(func() { log.SetOutput(previous) })
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&output, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
 	// Anonymous ceremonies from the old flow must restart. Even that failure
 	// must log a stored claimed name without allowing newline injection.
 	claimed := "alice\nforged log entry"
 	testMemory(s).PutLogin("old", claimed, webauthn.SessionData{})
 	w := loginFinishRequest(s, "old", "secret assertion body")
 	assert.Equal(t, 401, w.Code)
-	assert.Contains(t, output.String(), `claimed_username="alice\nforged log entry"`)
+	assert.Contains(t, output.String(), `"claimed_username":"alice\nforged log entry"`)
 	assert.NotContains(t, output.String(), "alice\nforged")
 	assert.NotContains(t, output.String(), "secret assertion body")
 }

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/go-webauthn/webauthn/webauthn"
+	"github.com/razzie-cloud/access-gateway/internal/logging"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -36,6 +37,7 @@ type redisFlow struct{ Origin, ReturnTo, StateHash string }
 type redisGrant struct{ Flow, Parent string }
 
 func newRedisSessions(uri, namespace string) (*redisSessions, error) {
+	redis.SetLogger(logging.RedisLogger{})
 	if uri == "" {
 		return nil, errors.New("Redis URI is required: set REDIS_URI or REDIS_URI_FROM")
 	}

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/go-webauthn/webauthn/webauthn"
+	"github.com/razzie-cloud/access-gateway/internal/logging"
 )
 
 var errRegistrationUnavailable = errors.New("registration unavailable")
@@ -118,10 +119,19 @@ func (s *Server) completeRegistration(ctx context.Context, registration registra
 	if name == "" { // Ceremonies started before device naming was introduced.
 		name = "Unnamed device"
 	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO webauthn_credentials(user_id,credential_id,credential_json,created_at,device_name) VALUES($1,$2,$3,$4,$5)`, registration.User.ID, credential.ID, data, time.Now().Unix(), name); err != nil {
+	var deviceID int64
+	if err = tx.QueryRowContext(ctx, `INSERT INTO webauthn_credentials(user_id,credential_id,credential_json,created_at,device_name) VALUES($1,$2,$3,$4,$5) RETURNING id`, registration.User.ID, credential.ID, data, time.Now().Unix(), name).Scan(&deviceID); err != nil {
 		return fmt.Errorf("insert credential: %w", err)
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	kind := "link"
+	if registration.LinkHash == "" {
+		kind = "bootstrap"
+	}
+	logging.For(ctx).Info("Device enrolled", "event", "registration.completed", "user_id", userID(registration.User.ID), "device_id", deviceID, "enrollment_type", kind)
+	return nil
 }
 
 func equalID(a, b []byte) bool { return string(a) == string(b) }

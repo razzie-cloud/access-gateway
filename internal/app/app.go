@@ -7,7 +7,6 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"errors"
-	"log"
 	"net/http"
 	"net/netip"
 	"time"
@@ -19,6 +18,7 @@ import (
 
 	"github.com/razzie-cloud/access-gateway/internal/db"
 	"github.com/razzie-cloud/access-gateway/internal/health"
+	"github.com/razzie-cloud/access-gateway/internal/logging"
 )
 
 type Config struct {
@@ -54,20 +54,20 @@ type Server struct {
 
 func NewServer(cfg Config) (*Server, error) {
 	if err := validateForwardAuthConfig(cfg); err != nil {
-		return nil, err
+		return nil, logging.Wrap("forward_auth_config", err)
 	}
 	proxies, err := parseTrustedProxies(cfg.TrustedProxies)
 	if err != nil {
-		return nil, err
+		return nil, logging.Wrap("trusted_proxy_config", err)
 	}
 	sessions, err := newRedisSessions(cfg.RedisURL, cfg.Origin)
 	if err != nil {
-		return nil, err
+		return nil, logging.Wrap("redis_connect", err)
 	}
 	sqlDB, err := sql.Open("pgx", cfg.DatabaseURL)
 	if err != nil {
 		_ = sessions.Close()
-		return nil, err
+		return nil, logging.Wrap("postgres_open", err)
 	}
 	initialized := false
 	defer func() {
@@ -78,11 +78,12 @@ func NewServer(cfg Config) (*Server, error) {
 	}()
 
 	if err := db.RunMigrations(sqlDB); err != nil {
-		return nil, err
+		return nil, logging.Wrap("migrations", err)
 	}
 
 	adapter := postgres.New(sqlDB)
 	repo := rel.New(adapter)
+	repo.Instrumentation(nil)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -93,7 +94,7 @@ func NewServer(cfg Config) (*Server, error) {
 		RPOrigins:     []string{cfg.Origin},
 	})
 	if err != nil {
-		return nil, err
+		return nil, logging.Wrap("webauthn_init", err)
 	}
 
 	s := &Server{
@@ -106,12 +107,12 @@ func NewServer(cfg Config) (*Server, error) {
 		mux:            http.NewServeMux(),
 	}
 	if err := s.ensureLoginSecret(ctx); err != nil {
-		return nil, err
+		return nil, logging.Wrap("login_secret", err)
 	}
 	s.routes()
 
 	if err := s.ensureBootstrapTokenIfNoUsers(ctx); err != nil {
-		return nil, err
+		return nil, logging.Wrap("bootstrap", err)
 	}
 
 	s.health = health.New(
@@ -131,7 +132,8 @@ func (s *Server) Close() error {
 }
 
 func (s *Server) ListenAndServe() error {
-	return http.ListenAndServe(s.cfg.ListenAddr, s.handler())
+	server := &http.Server{Addr: s.cfg.ListenAddr, Handler: s.handler(), ErrorLog: logging.ServerLogger()}
+	return server.ListenAndServe()
 }
 
 func (s *Server) ensureBootstrapTokenIfNoUsers(ctx context.Context) error {
@@ -162,6 +164,6 @@ func (s *Server) ensureBootstrapTokenIfNoUsers(ctx context.Context) error {
 		return err
 	}
 
-	log.Printf("BOOTSTRAP TOKEN (one-time, first user only): %s", tokenHex)
+	logging.BootstrapToken(ctx, tokenHex)
 	return nil
 }

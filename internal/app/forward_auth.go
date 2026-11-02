@@ -4,12 +4,14 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/razzie-cloud/access-gateway/internal/logging"
 )
 
 const appCallbackPath = "/_auth/callback"
@@ -110,6 +112,7 @@ func (s *Server) handleForwardAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(s.cfg.ForwardAuthOrigins) == 0 {
+		logging.FailKind(r.Context(), slog.LevelError, "forward_auth", "not_configured")
 		http.Error(w, "Forward authentication is not configured", http.StatusServiceUnavailable)
 		return
 	}
@@ -126,6 +129,7 @@ func (s *Server) handleForwardAuth(w http.ResponseWriter, r *http.Request) {
 	if cookie, err := r.Cookie(appCookieName(origin, "app")); err == nil {
 		username, ok, err := s.sessions.getAppAuth(r.Context(), cookie.Value, origin)
 		if err != nil {
+			logging.Fail(r.Context(), slog.LevelError, "redis", err)
 			http.Error(w, "Session storage unavailable", http.StatusServiceUnavailable)
 			return
 		}
@@ -136,15 +140,18 @@ func (s *Server) handleForwardAuth(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if err != nil {
+				logging.Fail(r.Context(), slog.LevelError, "postgres", err)
 				http.Error(w, "Unable to validate user", http.StatusServiceUnavailable)
 				return
 			}
 			if strings.ContainsFunc(user.Username, func(r rune) bool { return r < 32 || r == 127 }) {
+				logging.FailKind(r.Context(), slog.LevelError, "forward_auth", "invalid_username_header")
 				http.Error(w, "User name cannot be sent as an HTTP header", http.StatusInternalServerError)
 				return
 			}
 			id, err := uuid.FromBytes(user.ID)
 			if err != nil {
+				logging.Fail(r.Context(), slog.LevelError, "application", err)
 				http.Error(w, "Invalid user ID", http.StatusInternalServerError)
 				return
 			}
@@ -156,6 +163,7 @@ func (s *Server) handleForwardAuth(w http.ResponseWriter, r *http.Request) {
 	}
 	flow, state, err := s.sessions.beginAppLogin(r.Context(), origin, target.String())
 	if err != nil {
+		logging.Fail(r.Context(), slog.LevelError, "application", err)
 		http.Error(w, "Unable to start sign-in; try again later", http.StatusServiceUnavailable)
 		return
 	}
@@ -171,6 +179,7 @@ func (s *Server) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 	flowID := r.URL.Query().Get("flow")
 	flow, ok, err := s.sessions.appLogin(r.Context(), flowID)
 	if err != nil {
+		logging.Fail(r.Context(), slog.LevelError, "redis", err)
 		http.Error(w, "Session storage unavailable", http.StatusServiceUnavailable)
 		return
 	}
@@ -182,6 +191,7 @@ func (s *Server) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		code, ok, err := s.sessions.authorizeAppLogin(r.Context(), flowID, cookie.Value)
 		if err != nil {
+			logging.Fail(r.Context(), slog.LevelError, "redis", err)
 			http.Error(w, "Session storage unavailable", http.StatusServiceUnavailable)
 			return
 		}
@@ -195,10 +205,11 @@ func (s *Server) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 	// successful login app.js reloads this URL to complete the handoff.
 	data, err := s.state(r)
 	if err != nil {
+		logging.Fail(r.Context(), slog.LevelError, "application", err)
 		http.Error(w, "Unable to load sign-in", http.StatusServiceUnavailable)
 		return
 	}
-	render(w, http.StatusOK, "page", data)
+	render(w, r, http.StatusOK, "page", data)
 }
 
 func (s *Server) handleAppCallback(w http.ResponseWriter, r *http.Request, origin string, target *url.URL) {
@@ -219,6 +230,7 @@ func (s *Server) handleAppCallback(w http.ResponseWriter, r *http.Request, origi
 	}
 	token, returnTo, ok, err := s.sessions.completeAppLogin(r.Context(), flowID, query.Get("code"), cookie.Value, origin)
 	if err != nil {
+		logging.Fail(r.Context(), slog.LevelError, "redis", err)
 		http.Error(w, "Session storage unavailable", http.StatusServiceUnavailable)
 		return
 	}

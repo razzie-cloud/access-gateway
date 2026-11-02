@@ -3,7 +3,7 @@ package health
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
 	"sync/atomic"
 	"time"
@@ -26,12 +26,13 @@ type result struct {
 }
 
 type Monitor struct {
-	checks []Check
-	result atomic.Pointer[result]
+	checks      []Check
+	result      atomic.Pointer[result]
+	failedSince []time.Time
 }
 
 func New(checks ...Check) *Monitor {
-	return &Monitor{checks: append([]Check(nil), checks...)}
+	return &Monitor{checks: append([]Check(nil), checks...), failedSince: make([]time.Time, len(checks))}
 }
 
 // Start runs one check cycle at a time, immediately and then every ten seconds.
@@ -63,7 +64,7 @@ func (m *Monitor) Start(parent context.Context) func() {
 
 func (m *Monitor) check(ctx context.Context) {
 	r := &result{checked: time.Now(), ready: len(m.checks) > 0}
-	for _, check := range m.checks {
+	for i, check := range m.checks {
 		if ctx.Err() != nil {
 			return
 		}
@@ -73,11 +74,15 @@ func (m *Monitor) check(ctx context.Context) {
 		cancel()
 		if err != nil || expired {
 			r.ready = false
-			if ctx.Err() == nil {
+			if ctx.Err() == nil && m.failedSince[i].IsZero() {
+				m.failedSince[i] = time.Now()
 				// Backend errors may contain credentials or private addresses.
-				// Names are fixed by the service, never supplied by a request.
-				log.Printf("health check failed: %s", check.Name)
+				slog.Warn("Dependency unavailable", "event", "dependency.unavailable", "dependency", check.Name)
 			}
+		} else if ctx.Err() == nil && !m.failedSince[i].IsZero() {
+			slog.Info("Dependency recovered", "event", "dependency.recovered", "dependency", check.Name,
+				"outage_duration_ms", time.Since(m.failedSince[i]).Milliseconds())
+			m.failedSince[i] = time.Time{}
 		}
 	}
 	if ctx.Err() == nil {

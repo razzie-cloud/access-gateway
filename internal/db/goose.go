@@ -1,22 +1,36 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"embed"
-	"fmt"
+	"io/fs"
+	"log/slog"
+	"time"
 
 	"github.com/pressly/goose/v3"
+	"github.com/razzie-cloud/access-gateway/internal/logging"
 )
 
 //go:embed migrations/*.sql
 var migrations embed.FS
 
 func RunMigrations(db *sql.DB) error {
-	goose.SetDialect("postgres")
-	goose.SetBaseFS(migrations)
-
-	if err := goose.Up(db, "migrations"); err != nil {
-		return fmt.Errorf("goose up: %w", err)
+	root, err := fs.Sub(migrations, "migrations")
+	if err != nil {
+		return err
+	}
+	provider, err := goose.NewProvider(goose.DialectPostgres, db, root, goose.WithLogger(goose.NopLogger()))
+	if err != nil {
+		return err
+	}
+	start := time.Now()
+	results, err := provider.Up(context.Background())
+	if err != nil {
+		return logging.Wrap("migrate_postgres", err)
+	}
+	if len(results) > 0 {
+		slog.Info("Database migrations applied", "event", "migrations.applied", "component", "postgres", "count", len(results), "version", results[len(results)-1].Source.Version, "duration_ms", time.Since(start).Milliseconds())
 	}
 	return nil
 }

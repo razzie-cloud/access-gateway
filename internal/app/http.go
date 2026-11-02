@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -17,32 +17,36 @@ import (
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/google/uuid"
 
+	"github.com/razzie-cloud/access-gateway/internal/logging"
 	"github.com/razzie-cloud/access-gateway/internal/web"
 )
 
 func (s *Server) routes() {
 	s.limits = newRequestLimits()
-	s.mux.HandleFunc("/forward_auth", s.handleForwardAuth)
-	s.mux.HandleFunc("/auth/authorize", s.handleAuthorize)
-	s.mux.Handle("/static/", http.FileServer(http.FS(web.Assets)))
-	s.mux.HandleFunc("/", s.handlePage)
-	s.mux.HandleFunc("/register", s.handlePage)
-	s.mux.HandleFunc("/ui/state", s.handleState)
-	s.mux.HandleFunc("/ui/users", s.handleCreateUser)
-	s.mux.HandleFunc("/ui/admin", s.handleAdmin)
-	s.mux.HandleFunc("/ui/activity", s.handleActivity)
-	s.mux.HandleFunc("/ui/devices/rename", s.handleRenameDevice)
-	s.mux.HandleFunc("/ui/devices/remove", s.handleRemoveDevice)
-	s.mux.HandleFunc("/ui/sessions/remove", s.handleRemoveSession)
-	s.mux.HandleFunc("/ui/links", s.handleCreateLink)
-	s.mux.HandleFunc("/ui/logout", s.handleUILogout)
-	s.mux.HandleFunc("/api/bootstrap", s.handleBootstrap)
-	s.mux.HandleFunc("/api/register/begin", s.handleRegisterBegin)
-	s.mux.HandleFunc("/api/register/finish", s.handleRegisterFinish)
-	s.mux.HandleFunc("/api/login/begin", s.handleLoginBegin)
-	s.mux.HandleFunc("/api/login/finish", s.handleLoginFinish)
-	s.mux.HandleFunc("/api/me", s.handleMe)
-	s.mux.HandleFunc("/api/logout", s.handleLogout)
+	handle := func(pattern string, handler http.HandlerFunc) {
+		s.mux.Handle(pattern, logging.Route(pattern, handler))
+	}
+	handle("/forward_auth", s.handleForwardAuth)
+	handle("/auth/authorize", s.handleAuthorize)
+	s.mux.Handle("/static/", logging.Route("/static/", http.FileServer(http.FS(web.Assets))))
+	handle("/", s.handlePage)
+	handle("/register", s.handlePage)
+	handle("/ui/state", s.handleState)
+	handle("/ui/users", s.handleCreateUser)
+	handle("/ui/admin", s.handleAdmin)
+	handle("/ui/activity", s.handleActivity)
+	handle("/ui/devices/rename", s.handleRenameDevice)
+	handle("/ui/devices/remove", s.handleRemoveDevice)
+	handle("/ui/sessions/remove", s.handleRemoveSession)
+	handle("/ui/links", s.handleCreateLink)
+	handle("/ui/logout", s.handleUILogout)
+	handle("/api/bootstrap", s.handleBootstrap)
+	handle("/api/register/begin", s.handleRegisterBegin)
+	handle("/api/register/finish", s.handleRegisterFinish)
+	handle("/api/login/begin", s.handleLoginBegin)
+	handle("/api/login/finish", s.handleLoginFinish)
+	handle("/api/me", s.handleMe)
+	handle("/api/logout", s.handleLogout)
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {
@@ -68,6 +72,7 @@ func (s *Server) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 
 	n, err := s.countUsers(ctx)
 	if err != nil {
+		logging.Fail(r.Context(), slog.LevelError, "postgres", err)
 		writeJSON(w, 500, map[string]string{"error": "db error"})
 		return
 	}
@@ -118,6 +123,7 @@ func (s *Server) handleRegisterBegin(w http.ResponseWriter, r *http.Request) {
 		}
 		n, countErr := s.countUsers(ctx)
 		if countErr != nil {
+			logging.Fail(r.Context(), slog.LevelError, "postgres", countErr)
 			writeJSON(w, 500, map[string]string{"error": "db error"})
 			return
 		}
@@ -139,6 +145,7 @@ func (s *Server) handleRegisterBegin(w http.ResponseWriter, r *http.Request) {
 	if registration.LinkHash != "" {
 		waUser, err = s.loadWebAuthnUser(ctx, registration.User)
 		if err != nil {
+			logging.Fail(r.Context(), slog.LevelError, "postgres", err)
 			writeJSON(w, 500, map[string]string{"error": "db error"})
 			return
 		}
@@ -157,11 +164,13 @@ func (s *Server) handleRegisterBegin(w http.ResponseWriter, r *http.Request) {
 		webauthn.WithExtensions(webauthn.WithExtensionCredProps()),
 	)
 	if err != nil {
+		logging.Fail(r.Context(), slog.LevelError, "webauthn", err)
 		writeJSON(w, 500, map[string]string{"error": "webauthn error"})
 		return
 	}
 	sid := newSID()
 	if err := s.sessions.PutRegistration(r.Context(), sid, registration, *sd); err != nil {
+		logging.Fail(r.Context(), slog.LevelError, "redis", err)
 		writeJSON(w, 503, map[string]string{"error": "session storage unavailable"})
 		return
 	}
@@ -181,6 +190,7 @@ func (s *Server) handleRegisterFinish(w http.ResponseWriter, r *http.Request) {
 	}
 	registration, sd, ok, err := s.sessions.GetRegistration(r.Context(), sid.Value)
 	if err != nil {
+		logging.Fail(r.Context(), slog.LevelError, "redis", err)
 		writeJSON(w, 503, map[string]string{"error": "session storage unavailable"})
 		return
 	}
@@ -200,6 +210,7 @@ func (s *Server) handleRegisterFinish(w http.ResponseWriter, r *http.Request) {
 	if registration.LinkHash != "" {
 		waUser, err = s.loadWebAuthnUser(ctx, registration.User)
 		if err != nil {
+			logging.Fail(r.Context(), slog.LevelError, "postgres", err)
 			writeJSON(w, 500, map[string]string{"error": "db error"})
 			return
 		}
@@ -221,6 +232,7 @@ func (s *Server) handleRegisterFinish(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, errRegistrationUnavailable) {
 			writeJSON(w, 409, map[string]string{"error": "registration link expired, used, or bootstrap already completed"})
 		} else {
+			logging.Fail(r.Context(), slog.LevelError, "postgres", err)
 			writeJSON(w, 500, map[string]string{"error": "failed to store credential"})
 		}
 		return
@@ -228,7 +240,7 @@ func (s *Server) handleRegisterFinish(w http.ResponseWriter, r *http.Request) {
 	if err := s.sessions.DeleteSID(r.Context(), sid.Value); err != nil {
 		// Enrollment already committed in PostgreSQL. Its transaction prevents
 		// reuse even if the expired ceremony cannot yet be removed from Redis.
-		log.Print("unable to remove completed registration session")
+		logging.For(r.Context()).Warn("Unable to remove completed registration session", "event", "registration.cleanup_failed", "operation", "delete_ceremony", "dependency", "redis", "error_kind", logging.Kind(err))
 	}
 	s.setCookie(w, "sid", "", -1)
 	writeJSON(w, 200, map[string]any{"ok": true})
@@ -243,7 +255,7 @@ const loginFailureMessage = "sign-in failed; check your passkey and try again"
 func (s *Server) rejectLogin(w http.ResponseWriter, r *http.Request, username, reason string) {
 	// Quote and bound attacker-controlled names. Never log bearer cookies,
 	// challenges, signatures, bootstrap tokens or registration links.
-	log.Printf("login failed ip=%q claimed_username=%q reason=%q", s.clientIP(r).String(), username[:min(len(username), 64)], reason)
+	logging.For(r.Context()).Warn("Login rejected", "event", "login.rejected", "client_ip", s.clientIP(r).String(), "claimed_username", username[:min(len(username), 64)], "reason", reason)
 	writeJSON(w, http.StatusUnauthorized, map[string]string{"error": loginFailureMessage})
 }
 
@@ -265,17 +277,19 @@ func (s *Server) handleLoginBegin(w http.ResponseWriter, r *http.Request) {
 	}
 	// Record the attempt before the browser prompt, including canceled prompts
 	// and unknown accounts. A claimed name is never an authenticated identity.
-	log.Printf("login attempt ip=%q claimed_username=%q", s.clientIP(r).String(), req.Username)
+	logging.For(r.Context()).Info("Login attempted", "event", "login.attempted", "client_ip", s.clientIP(r).String(), "claimed_username", req.Username)
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 	allowed, user, err := s.loginCredentials(ctx, req.Username)
 	if err != nil {
+		logging.Fail(r.Context(), slog.LevelError, "application", err)
 		writeJSON(w, 503, map[string]string{"error": "unable to sign in; try again later"})
 		return
 	}
 	opts, sessionData, err := s.wa.BeginLogin(user,
 		webauthn.WithUserVerification(protocol.VerificationPreferred), webauthn.WithAllowedCredentials(allowed))
 	if err != nil {
+		logging.Fail(r.Context(), slog.LevelError, "webauthn", err)
 		writeJSON(w, 500, map[string]string{"error": "webauthn error"})
 		return
 	}
@@ -288,6 +302,7 @@ func (s *Server) handleLoginBegin(w http.ResponseWriter, r *http.Request) {
 	}
 	sid := newSID()
 	if err := s.sessions.PutLogin(ctx, sid, req.Username, *sessionData); err != nil {
+		logging.Fail(r.Context(), slog.LevelError, "redis", err)
 		writeJSON(w, 503, map[string]string{"error": "session storage unavailable"})
 		return
 	}
@@ -312,6 +327,7 @@ func (s *Server) handleLoginFinish(w http.ResponseWriter, r *http.Request) {
 
 	claimedUsername, sd, ok, err := s.sessions.GetLogin(ctx, sid.Value)
 	if err != nil {
+		logging.Fail(r.Context(), slog.LevelError, "redis", err)
 		writeJSON(w, 503, map[string]string{"error": "session storage unavailable"})
 		return
 	}
@@ -328,6 +344,7 @@ func (s *Server) handleLoginFinish(w http.ResponseWriter, r *http.Request) {
 	u, err := s.getUserByUsername(ctx, claimedUsername)
 	if err != nil {
 		if !errors.Is(err, sql.ErrNoRows) {
+			logging.Fail(r.Context(), slog.LevelError, "application", err)
 			writeJSON(w, 503, map[string]string{"error": "unable to sign in; try again later"})
 		} else {
 			s.rejectLogin(w, r, claimedUsername, "invalid assertion or unknown credential")
@@ -336,6 +353,7 @@ func (s *Server) handleLoginFinish(w http.ResponseWriter, r *http.Request) {
 	}
 	user, err := s.loadWebAuthnUser(ctx, u)
 	if err != nil {
+		logging.Fail(r.Context(), slog.LevelError, "application", err)
 		writeJSON(w, 503, map[string]string{"error": "unable to sign in; try again later"})
 		return
 	}
@@ -353,10 +371,12 @@ func (s *Server) handleLoginFinish(w http.ResponseWriter, r *http.Request) {
 	ok, err = s.completeDeviceLogin(ctx, sid.Value, authHex, u, cred)
 	if err != nil {
 		if errors.Is(err, errSessionStore) {
+			logging.Fail(r.Context(), slog.LevelError, "redis", err)
 			writeJSON(w, 503, map[string]string{"error": "session storage unavailable"})
 		} else if errors.Is(err, sql.ErrNoRows) {
 			s.rejectLogin(w, r, claimedUsername, "device removed")
 		} else {
+			logging.Fail(r.Context(), slog.LevelError, "application", err)
 			writeJSON(w, 500, map[string]string{"error": "failed to complete login"})
 		}
 		return
@@ -366,6 +386,7 @@ func (s *Server) handleLoginFinish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	logging.For(r.Context()).Info("Login succeeded", "event", "login.succeeded", "user_id", userID(u.ID), "client_ip", s.clientIP(r).String())
 	s.setCookie(w, "auth", authHex, 0)
 
 	s.setCookie(w, "sid", "", -1)
@@ -385,6 +406,7 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	}
 	u, ok, err := s.sessions.GetAuth(r.Context(), c.Value)
 	if err != nil {
+		logging.Fail(r.Context(), slog.LevelError, "redis", err)
 		writeJSON(w, 503, map[string]string{"error": "session storage unavailable"})
 		return
 	}
@@ -399,8 +421,12 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	c, err := r.Cookie("auth")
 	if err == nil && c.Value != "" {
 		if err := s.sessions.DeleteAuth(r.Context(), c.Value); err != nil {
+			logging.Fail(r.Context(), slog.LevelError, "redis", err)
 			writeJSON(w, 503, map[string]string{"error": "session storage unavailable"})
 			return
+		}
+		if c.Value != "" {
+			logging.For(r.Context()).Info("Logout completed", "event", "logout.completed")
 		}
 	}
 	s.setCookie(w, "auth", "", -1)

@@ -75,17 +75,17 @@ func TestActivityTemplateEscapesMetadataAndHidesUsersForMembers(t *testing.T) {
 		Sessions: []sessionView{{sessionSummary: sessionSummary{Username: "<script>name</script>", Origin: `<img src=x onerror="alert(1)">`}}},
 	}
 	w := httptest.NewRecorder()
-	render(w, 200, "activity", data)
+	render(w, httptest.NewRequest("GET", "/ui/activity", nil), 200, "activity", data)
 	assert.NotContains(t, w.Body.String(), "<script>")
 	assert.NotContains(t, w.Body.String(), "<img")
 	assert.Contains(t, w.Body.String(), "&lt;script&gt;")
 	data.User.IsAdmin = false
 	w = httptest.NewRecorder()
-	render(w, 200, "activity", data)
+	render(w, httptest.NewRequest("GET", "/ui/activity", nil), 200, "activity", data)
 	assert.NotContains(t, w.Body.String(), "<h3>Users")
 	data.User = nil
 	w = httptest.NewRecorder()
-	render(w, 200, "activity", data)
+	render(w, httptest.NewRequest("GET", "/ui/activity", nil), 200, "activity", data)
 	assert.NotContains(t, w.Body.String(), "<table>")
 }
 
