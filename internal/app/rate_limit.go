@@ -133,7 +133,7 @@ func (s *Server) authenticatedForRateLimit(r *http.Request) bool {
 			return true
 		}
 	}
-	if r.URL.Path == "/forward_auth" {
+	if r.URL.Path == "/forward_auth" || r.URL.Path == "/forward_auth/admin" {
 		target, err := s.forwardedAppURL(r)
 		if err == nil {
 			origin := target.Scheme + "://" + target.Host

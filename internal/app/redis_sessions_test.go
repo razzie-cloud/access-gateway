@@ -386,8 +386,12 @@ func TestRedisFailureReturns503WithoutIssuingCookies(t *testing.T) {
 		assert.Equal(t, 503, w.Code, tc.path)
 		assert.Empty(t, w.Header().Get("Set-Cookie"), tc.path)
 	}
-	w := forwardRequest(s, testAppOrigin, "/", &http.Cookie{Name: appCookieName(testAppOrigin, "app"), Value: token})
-	assert.Equal(t, 503, w.Code)
-	assert.Empty(t, w.Header().Get("X-Auth-Request-User"))
-	assert.Empty(t, w.Header().Get("Set-Cookie"))
+	for _, endpoint := range []string{"/forward_auth", "/forward_auth/admin"} {
+		w := forwardRequestTo(s, endpoint, testAppOrigin, "/", &http.Cookie{Name: appCookieName(testAppOrigin, "app"), Value: token})
+		assert.Equal(t, 503, w.Code)
+		assert.Empty(t, w.Header().Get("X-Auth-Request-User"))
+		assert.Empty(t, w.Header().Get("X-Auth-Request-Name"))
+		assert.Empty(t, w.Header().Get("Set-Cookie"))
+		assert.Empty(t, w.Header().Get("Location"))
+	}
 }

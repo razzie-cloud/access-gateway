@@ -107,6 +107,14 @@ func setAppCookie(w http.ResponseWriter, origin, name, value string, maxAge int)
 }
 
 func (s *Server) handleForwardAuth(w http.ResponseWriter, r *http.Request) {
+	s.forwardAuth(w, r, false)
+}
+
+func (s *Server) handleAdminForwardAuth(w http.ResponseWriter, r *http.Request) {
+	s.forwardAuth(w, r, true)
+}
+
+func (s *Server) forwardAuth(w http.ResponseWriter, r *http.Request, requireAdmin bool) {
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
@@ -123,6 +131,8 @@ func (s *Server) handleForwardAuth(w http.ResponseWriter, r *http.Request) {
 	}
 	origin := target.Scheme + "://" + target.Host
 	if target.Path == appCallbackPath {
+		// The callback only completes authentication and redirects. The next
+		// request checks the user's current role before granting app access.
 		s.handleAppCallback(w, r, origin, target)
 		return
 	}
@@ -142,6 +152,10 @@ func (s *Server) handleForwardAuth(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				logging.Fail(r.Context(), slog.LevelError, "postgres", err)
 				http.Error(w, "Unable to validate user", http.StatusServiceUnavailable)
+				return
+			}
+			if requireAdmin && !user.IsAdmin {
+				http.Error(w, "Administrator access required", http.StatusForbidden)
 				return
 			}
 			if strings.ContainsFunc(user.Username, func(r rune) bool { return r < 32 || r == 127 }) {

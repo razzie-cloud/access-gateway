@@ -31,7 +31,7 @@ func TestRoutesRejectWrongMethod(t *testing.T) {
 		{"POST", "/ui/admin"},
 		{"POST", "/ui/activity"}, {"GET", "/ui/devices/rename"}, {"GET", "/ui/devices/remove"}, {"GET", "/ui/sessions/remove"},
 		{"POST", "/api/bootstrap"}, {"POST", "/api/me"},
-		{"POST", "/forward_auth"}, {"POST", "/auth/authorize"},
+		{"POST", "/forward_auth"}, {"POST", "/forward_auth/admin"}, {"POST", "/auth/authorize"},
 		{"GET", "/ui/users"}, {"GET", "/ui/links"}, {"GET", "/ui/logout"},
 		{"GET", "/api/register/begin"}, {"GET", "/api/register/finish"},
 		{"GET", "/api/login/begin"}, {"GET", "/api/login/finish"}, {"GET", "/api/logout"},

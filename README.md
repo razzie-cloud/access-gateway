@@ -218,16 +218,36 @@ other.example.net {
 }
 ```
 
+For an admin-only app, select `uri /forward_auth/admin` in its `forward_auth`
+block. Both endpoints use the same `FORWARD_AUTH_ORIGINS` allowlist and SSO
+sessions. The admin endpoint reads the user's current `is_admin` value from
+PostgreSQL on every authenticated request: admins receive 204 with the usual
+identity headers; regular users receive **403 Administrator access required**
+without identity headers or a sign-in redirect. Role changes apply on the next
+request, including for existing app sessions. Missing or expired sessions follow
+the normal sign-in flow; deleted users receive 401 and dependency failures 503.
+
+Keep `/_auth/callback` behind forward auth. For a whole admin-only app it can use
+`/forward_auth/admin`; for mixed regular/admin paths on one hostname, route the
+callback through `/forward_auth` and every admin path through
+`/forward_auth/admin`. Either endpoint completes the callback with a 303 redirect,
+then the original request enforces the selected policy. A regular user can
+complete sign-in but cannot pass an admin check. Reserve the callback path for
+this exchange and never proxy it directly to the app.
+
 The same `forward_auth` options work as Caddy Docker Proxy labels. The infra
 snippet includes the header copying; the stack still needs a gateway service
 with its public route and the configuration above before it can be deployed.
 
-`GET /forward_auth` reads `X-Forwarded-Proto`, `X-Forwarded-Host`,
-`X-Forwarded-Uri`, and (on callbacks) `X-Forwarded-Method`. Caddy sets these from
-the original request. Only trusted reverse proxies should reach this endpoint;
+`GET /forward_auth` and `GET /forward_auth/admin` read `X-Forwarded-Proto`,
+`X-Forwarded-Host`, `X-Forwarded-Uri`, and (on callbacks) `X-Forwarded-Method`.
+Caddy sets these from the original request. Only trusted reverse proxies should
+reach these endpoints;
 other proxies must overwrite client-supplied forwarded headers. Protect app
 backends from direct access, and use `copy_headers` so Caddy replaces supplied
-identity headers with the gateway's response values.
+identity headers with the gateway's response values. Strip incoming
+`X-Auth-Request-User` and `X-Auth-Request-Name` before forward auth, as the local
+and production configurations do.
 
 The sign-in flow works across unrelated app domains:
 

@@ -27,6 +27,7 @@ func (s *Server) routes() {
 		s.mux.Handle(pattern, logging.Route(pattern, handler))
 	}
 	handle("/forward_auth", s.handleForwardAuth)
+	handle("/forward_auth/admin", s.handleAdminForwardAuth)
 	handle("/auth/authorize", s.handleAuthorize)
 	s.mux.Handle("/static/", logging.Route("/static/", http.FileServer(http.FS(web.Assets))))
 	handle("/", s.handlePage)

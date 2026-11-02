@@ -16,8 +16,12 @@ import (
 const testAppOrigin = "https://app.example.net"
 
 func forwardRequest(s *Server, origin, uri string, cookies ...*http.Cookie) *httptest.ResponseRecorder {
+	return forwardRequestTo(s, "/forward_auth", origin, uri, cookies...)
+}
+
+func forwardRequestTo(s *Server, endpoint, origin, uri string, cookies ...*http.Cookie) *httptest.ResponseRecorder {
 	u, _ := url.Parse(origin)
-	r := httptest.NewRequest("GET", "/forward_auth", nil)
+	r := httptest.NewRequest("GET", endpoint, nil)
 	r.Header.Set("X-Forwarded-Proto", u.Scheme)
 	r.Header.Set("X-Forwarded-Host", u.Host)
 	r.Header.Set("X-Forwarded-Uri", uri)
@@ -301,12 +305,157 @@ func TestForwardAuthFailsClosedOnUserLookup(t *testing.T) {
 			_, err := s.db.Exec(`DELETE FROM users WHERE username='alice'`)
 			require.NoError(t, err)
 		}
-		w := forwardRequest(s, testAppOrigin, "/", &http.Cookie{Name: appCookieName(testAppOrigin, "app"), Value: token})
-		if brokenDB {
-			assert.Equal(t, http.StatusServiceUnavailable, w.Code)
-		} else {
-			assert.Equal(t, http.StatusUnauthorized, w.Code)
+		for _, endpoint := range []string{"/forward_auth", "/forward_auth/admin"} {
+			w := forwardRequestTo(s, endpoint, testAppOrigin, "/", &http.Cookie{Name: appCookieName(testAppOrigin, "app"), Value: token})
+			if brokenDB {
+				assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+			} else {
+				assert.Equal(t, http.StatusUnauthorized, w.Code)
+			}
+			assert.Empty(t, w.Header().Get("X-Auth-Request-User"))
+			assert.Empty(t, w.Header().Get("X-Auth-Request-Name"))
+			assert.Empty(t, w.Header().Get("Location"))
 		}
+	}
+}
+
+func TestAdminForwardAuthRejectsInvalidRequests(t *testing.T) {
+	s := unitServer()
+	w := forwardRequestTo(s, "/forward_auth/admin", testAppOrigin, "/")
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+	s.cfg.ForwardAuthOrigins = []string{testAppOrigin}
+	for _, tc := range []struct{ origin, uri string }{
+		{"https://evil.example", "/"},
+		{"http://app.example.net", "/"},
+		{testAppOrigin, "https://evil.example/"},
+		{testAppOrigin, "//evil.example/"},
+		{testAppOrigin, "/%0d%0aevil"},
+		{testAppOrigin, appCallbackPath + "?state=unknown&code=unknown"},
+	} {
+		w := forwardRequestTo(s, "/forward_auth/admin", tc.origin, tc.uri)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Empty(t, w.Header().Get("Location"))
+		assert.Empty(t, w.Header().Get("Set-Cookie"))
+		assert.Empty(t, w.Header().Get("X-Auth-Request-User"))
+		assert.Empty(t, w.Header().Get("X-Auth-Request-Name"))
+	}
+}
+
+func TestAdminForwardAuthStartsLogin(t *testing.T) {
+	for _, token := range []string{"", "unknown", "expired", "central-session"} {
+		t.Run(token, func(t *testing.T) {
+			s := unitServer()
+			s.cfg.ForwardAuthOrigins = []string{testAppOrigin}
+			testMemory(s).PutAuth("central-session", "admin")
+			testMemory(s).apps["expired"] = appSession{origin: testAppOrigin, parent: "expired-parent"}
+			testMemory(s).auth["expired-parent"] = authEntry{username: "admin", exp: time.Now().Add(-time.Minute)}
+			w := forwardRequestTo(s, "/forward_auth/admin", testAppOrigin, "/admin?tab=users",
+				&http.Cookie{Name: appCookieName(testAppOrigin, "app"), Value: token})
+			require.Equal(t, http.StatusSeeOther, w.Code)
+			assert.True(t, strings.HasPrefix(w.Header().Get("Location"), s.cfg.Origin+"/auth/authorize?flow="))
+			assert.Empty(t, w.Header().Get("X-Auth-Request-User"))
+			assert.Empty(t, w.Header().Get("X-Auth-Request-Name"))
+			require.Len(t, w.Result().Cookies(), 1)
+			state := w.Result().Cookies()[0]
+			assert.True(t, state.HttpOnly)
+			assert.True(t, state.Secure)
+			assert.Equal(t, http.SameSiteLaxMode, state.SameSite)
+			assert.Empty(t, state.Domain)
+			assert.Equal(t, "/", state.Path)
+		})
+	}
+}
+
+func TestAdminForwardAuthSSO(t *testing.T) {
+	s := postgresServer(t)
+	s.cfg.ForwardAuthOrigins = []string{testAppOrigin, "https://other.example.org"}
+	for _, tc := range []struct {
+		username string
+		admin    bool
+	}{
+		{"admin", true}, {"member", false},
+	} {
+		t.Run(tc.username, func(t *testing.T) {
+			user := addUser(t, s, tc.username, tc.admin)
+			id, err := uuid.FromBytes(user.ID)
+			require.NoError(t, err)
+			for _, callbackEndpoint := range []string{"/forward_auth/admin", "/forward_auth"} {
+				// Both whole-app protection and mixed regular/admin routes use
+				// the same handoff. The callback never grants upstream access.
+				w := forwardRequestTo(s, "/forward_auth/admin", testAppOrigin, "/admin?tab=users")
+				require.Equal(t, http.StatusSeeOther, w.Code)
+				require.Len(t, w.Result().Cookies(), 1)
+				state := w.Result().Cookies()[0]
+				w = request(s, "GET", w.Header().Get("Location"), "", tc.username+"-session")
+				require.Equal(t, http.StatusSeeOther, w.Code)
+				callback, err := url.Parse(w.Header().Get("Location"))
+				require.NoError(t, err)
+				w = forwardRequestTo(s, callbackEndpoint, testAppOrigin, callback.RequestURI(), state)
+				require.Equal(t, http.StatusSeeOther, w.Code)
+				assert.Equal(t, testAppOrigin+"/admin?tab=users", w.Header().Get("Location"))
+				assert.Empty(t, w.Header().Get("X-Auth-Request-User"))
+				assert.Empty(t, w.Header().Get("X-Auth-Request-Name"))
+				require.Len(t, w.Result().Cookies(), 2)
+				app := w.Result().Cookies()[0]
+				w = forwardRequestTo(s, "/forward_auth/admin", testAppOrigin, "/admin", app)
+				if tc.admin {
+					assert.Equal(t, http.StatusNoContent, w.Code)
+					assert.Equal(t, id.String(), w.Header().Get("X-Auth-Request-User"))
+					assert.Equal(t, tc.username, w.Header().Get("X-Auth-Request-Name"))
+				} else {
+					assert.Equal(t, http.StatusForbidden, w.Code)
+					assert.Contains(t, w.Body.String(), "Administrator access required")
+					assert.Empty(t, w.Header().Get("X-Auth-Request-User"))
+					assert.Empty(t, w.Header().Get("X-Auth-Request-Name"))
+				}
+				assert.Equal(t, "no-store", w.Header().Get("Cache-Control"))
+				assert.Empty(t, w.Header().Get("Location"))
+				assert.Empty(t, w.Header().Get("Set-Cookie"))
+				assert.Equal(t, http.StatusNoContent, forwardRequest(s, testAppOrigin, "/", app).Code)
+				assert.Equal(t, http.StatusBadRequest, forwardRequestTo(s, callbackEndpoint, testAppOrigin, callback.RequestURI(), state).Code)
+				// Neither an app token for another origin nor the gateway's
+				// central cookie can grant access to the admin endpoint.
+				for _, cookie := range []*http.Cookie{app, {Name: "auth", Value: tc.username + "-session"}} {
+					w = forwardRequestTo(s, "/forward_auth/admin", "https://other.example.org", "/admin", cookie)
+					assert.Equal(t, http.StatusSeeOther, w.Code)
+					assert.Empty(t, w.Header().Get("X-Auth-Request-User"))
+					assert.Empty(t, w.Header().Get("X-Auth-Request-Name"))
+				}
+			}
+		})
+	}
+}
+
+func TestAdminForwardAuthChecksLiveRoleAndSession(t *testing.T) {
+	s := postgresServer(t)
+	s.cfg.ForwardAuthOrigins = []string{testAppOrigin}
+	addUser(t, s, "alice", false)
+	store := s.sessions.(*redisSessions)
+	token := mintRedisAppSession(t, store, "alice-session")
+	app := &http.Cookie{Name: appCookieName(testAppOrigin, "app"), Value: token}
+	for _, admin := range []bool{false, true, false} {
+		_, err := s.db.Exec(`UPDATE users SET is_admin=$1 WHERE username='alice'`, admin)
+		require.NoError(t, err)
+		want := http.StatusForbidden
+		if admin {
+			want = http.StatusNoContent
+		}
+		assert.Equal(t, want, forwardRequestTo(s, "/forward_auth/admin", testAppOrigin, "/admin", app).Code)
+		assert.Equal(t, http.StatusNoContent, forwardRequest(s, testAppOrigin, "/", app).Code)
+	}
+	// Warm session caches must not bypass parent revocation or expiry.
+	for _, expired := range []bool{false, true} {
+		if expired {
+			require.NoError(t, store.PutAuth(t.Context(), "alice-session", "alice"))
+			token = mintRedisAppSession(t, store, "alice-session")
+			app.Value = token
+			assert.Equal(t, http.StatusForbidden, forwardRequestTo(s, "/forward_auth/admin", testAppOrigin, "/admin", app).Code)
+			require.NoError(t, store.client.PExpireAt(t.Context(), store.key("auth", "alice-session"), time.Now().Add(-time.Minute)).Err())
+		} else {
+			require.NoError(t, store.DeleteAuth(t.Context(), "alice-session"))
+		}
+		w := forwardRequestTo(s, "/forward_auth/admin", testAppOrigin, "/admin", app)
+		assert.Equal(t, http.StatusSeeOther, w.Code)
 		assert.Empty(t, w.Header().Get("X-Auth-Request-User"))
 		assert.Empty(t, w.Header().Get("X-Auth-Request-Name"))
 	}

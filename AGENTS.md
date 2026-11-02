@@ -185,6 +185,11 @@ absolute registration URLs from untrusted Host or forwarded headers.
   and returns 204 with X-Auth-Request-User (UUID) and X-Auth-Request-Name, or 303
   to the configured ORIGIN's /auth/authorize path. Empty allowlists return 503;
   malformed/unlisted forwarded origins return 400. Unknown paths return 404.
+- GET /forward_auth/admin shares the same SSO flow and app sessions, but requires
+  the user's current PostgreSQL is_admin value before returning 204/identity
+  headers. Regular users receive 403 without a login redirect. Both endpoints
+  complete /_auth/callback with a 303; the redirected app request enforces the
+  selected policy. Never cache roles or exempt callbacks from forward auth.
 - The gateway session must never be accepted as an app session or copied to an
   app. App sessions bind to exact allowed origins and live gateway sessions.
   Logging out of the gateway revokes derived app sessions. User lookup failures
