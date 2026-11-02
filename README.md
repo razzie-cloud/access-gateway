@@ -271,3 +271,22 @@ Authentication uses the built-in `GITHUB_TOKEN` with `packages: write`; no custo
 registry secret is needed. Organization policy must allow package creation;
 existing packages must grant this repository Actions write access. Set package
 visibility to public for unauthenticated pulls, or authenticate deployment hosts.
+
+## Health probes
+
+Internal `GET /healthz` reports process liveness; `GET /readyz` reports readiness
+of PostgreSQL and Redis.
+Both support HEAD and return plain text: 200 on success, 503 when not ready,
+and 405 for other methods. Responses use `Cache-Control: no-store` and never
+include backend addresses, credentials, or error details.
+
+Readiness checks run immediately in a background worker and repeat ten seconds
+after each cycle, with a two-second deadline per dependency. Until the first
+successful cycle, after a failed cycle, or once the last result is thirty seconds
+old, readiness returns 503. Probes only read cached state; they never query a
+backend, provision an instance, or generate request logs. Failed background
+checks log the dependency name once per failed cycle without raw backend errors.
+
+Use these endpoints directly on the private backend port. Keep public ingress
+and authentication rules in place. Container health checks use `/readyz` on
+`SERVICE_PORT` (default 8080).

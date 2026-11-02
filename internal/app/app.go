@@ -18,6 +18,7 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/razzie-cloud/access-gateway/internal/db"
+	"github.com/razzie-cloud/access-gateway/internal/health"
 )
 
 type Config struct {
@@ -45,7 +46,9 @@ type Server struct {
 	limits         *requestLimits
 	trustedProxies []netip.Prefix
 
-	mux *http.ServeMux
+	mux        *http.ServeMux
+	health     *health.Monitor
+	stopHealth func()
 }
 
 func NewServer(cfg Config) (*Server, error) {
@@ -107,11 +110,19 @@ func NewServer(cfg Config) (*Server, error) {
 		return nil, err
 	}
 
+	s.health = health.New(
+		health.Check{Name: "postgres", Ping: sqlDB.PingContext},
+		health.Check{Name: "redis", Ping: func(ctx context.Context) error { return sessions.client.Ping(ctx).Err() }},
+	)
+	s.stopHealth = s.health.Start(context.Background())
 	initialized = true
 	return s, nil
 }
 
 func (s *Server) Close() error {
+	if s.stopHealth != nil {
+		s.stopHealth()
+	}
 	return errors.Join(s.sessions.Close(), s.db.Close())
 }
 
