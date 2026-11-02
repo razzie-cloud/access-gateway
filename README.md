@@ -10,7 +10,7 @@ For local development, run `docker compose up --build` and open
 must be free. Redis uses a persistent volume and append-only storage.
 
 Compose builds the checked-out source and tags the gateway image as
-`ghcr.io/razzie-cloud/access-gateway:v1.0.1`. Set `ACCESS_GATEWAY_IMAGE_TAG`
+`ghcr.io/razzie-cloud/access-gateway:dev`. Set `ACCESS_GATEWAY_IMAGE_TAG`
 to override the local build's tag.
 
 To run the Go service directly:
@@ -268,11 +268,12 @@ start on one gateway replica and finish on another.
 
 The `Publish image` workflow builds the tagged commit's Dockerfile for
 `linux/amd64` and pushes `ghcr.io/razzie-cloud/access-gateway:<git-tag>` when a
-new tag is pushed to this service repository. For example, from this directory:
+new tag is pushed to this service repository. Set `RELEASE_TAG` to your chosen
+release tag, then run from this directory:
 
 ```sh
-git tag v1.2.3
-git push origin v1.2.3
+git tag "${RELEASE_TAG:?Set RELEASE_TAG}"
+git push origin "$RELEASE_TAG"
 ```
 
 The tagged commit must include `.github/workflows/publish-image.yml`. Creating
