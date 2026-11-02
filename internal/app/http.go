@@ -235,7 +235,6 @@ func (s *Server) handleRegisterFinish(w http.ResponseWriter, r *http.Request) {
 }
 
 type loginBeginReq struct {
-	// Accepted for older clients, but never used to look up an account.
 	Username string `json:"username"`
 }
 
@@ -244,7 +243,7 @@ const loginFailureMessage = "sign-in failed; check your passkey and try again"
 func (s *Server) rejectLogin(w http.ResponseWriter, r *http.Request, username, reason string) {
 	// Quote and bound attacker-controlled names. Never log bearer cookies,
 	// challenges, signatures, bootstrap tokens or registration links.
-	log.Printf("login failed ip=%q username=%q reason=%q", s.clientIP(r).String(), username[:min(len(username), 64)], reason)
+	log.Printf("login failed ip=%q claimed_username=%q reason=%q", s.clientIP(r).String(), username[:min(len(username), 64)], reason)
 	writeJSON(w, http.StatusUnauthorized, map[string]string{"error": loginFailureMessage})
 }
 
@@ -259,16 +258,36 @@ func (s *Server) handleLoginBegin(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]string{"error": "bad json"})
 		return
 	}
-	// No account lookup, account-specific options, or timing difference between
-	// existing and missing names. The authenticator selects the account.
-	opts, sessionData, err := s.wa.BeginDiscoverableLogin(webauthn.WithUserVerification(protocol.VerificationPreferred))
+	req.Username = strings.TrimSpace(req.Username)
+	if !validUsername(req.Username) {
+		writeJSON(w, 400, map[string]string{"error": "username must contain 1–64 bytes"})
+		return
+	}
+	// Record the attempt before the browser prompt, including canceled prompts
+	// and unknown accounts. A claimed name is never an authenticated identity.
+	log.Printf("login attempt ip=%q claimed_username=%q", s.clientIP(r).String(), req.Username)
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+	allowed, user, err := s.loginCredentials(ctx, req.Username)
+	if err != nil {
+		writeJSON(w, 503, map[string]string{"error": "unable to sign in; try again later"})
+		return
+	}
+	opts, sessionData, err := s.wa.BeginLogin(user,
+		webauthn.WithUserVerification(protocol.VerificationPreferred), webauthn.WithAllowedCredentials(allowed))
 	if err != nil {
 		writeJSON(w, 500, map[string]string{"error": "webauthn error"})
 		return
 	}
 
+	// The library requires every stored allowed ID to be owned by the user.
+	// Keep only real IDs in private session data; public options include padding.
+	sessionData.AllowedCredentialIDs = nil
+	for _, credential := range user.Creds {
+		sessionData.AllowedCredentialIDs = append(sessionData.AllowedCredentialIDs, credential.ID)
+	}
 	sid := newSID()
-	if err := s.sessions.PutLogin(r.Context(), sid, "", *sessionData); err != nil {
+	if err := s.sessions.PutLogin(ctx, sid, req.Username, *sessionData); err != nil {
 		writeJSON(w, 503, map[string]string{"error": "session storage unavailable"})
 		return
 	}
@@ -291,7 +310,7 @@ func (s *Server) handleLoginFinish(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 
-	_, sd, ok, err := s.sessions.GetLogin(ctx, sid.Value)
+	claimedUsername, sd, ok, err := s.sessions.GetLogin(ctx, sid.Value)
 	if err != nil {
 		writeJSON(w, 503, map[string]string{"error": "session storage unavailable"})
 		return
@@ -301,30 +320,30 @@ func (s *Server) handleLoginFinish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var u User
-	var lookupErr error
-	_, cred, err := s.wa.FinishPasskeyLogin(func(rawID, userHandle []byte) (webauthn.User, error) {
-		if len(userHandle) != 16 {
-			return nil, sql.ErrNoRows
-		}
-		// Resolve both account and credential, then let WebAuthn verify the
-		// user handle, challenge, RP/origin, flags and signature before login.
-		lookupErr = s.db.QueryRowContext(ctx, `SELECT u.id,u.username,u.is_admin,u.created_at
- FROM users u JOIN webauthn_credentials c ON c.user_id=u.id
- WHERE u.id=$1 AND c.credential_id=$2`, userHandle, rawID).Scan(&u.ID, &u.Username, &u.IsAdmin, &u.CreatedAt)
-		if lookupErr != nil {
-			return nil, lookupErr
-		}
-		var user WebAuthnUser
-		user, lookupErr = s.loadWebAuthnUser(ctx, u)
-		return user, lookupErr
-	}, sd, r)
+	if claimedUsername == "" || len(sd.UserID) == 0 || len(sd.AllowedCredentialIDs) == 0 {
+		s.rejectLogin(w, r, claimedUsername, "restart sign-in after upgrade")
+		return
+	}
+
+	u, err := s.getUserByUsername(ctx, claimedUsername)
 	if err != nil {
-		if lookupErr != nil && !errors.Is(lookupErr, sql.ErrNoRows) {
+		if !errors.Is(err, sql.ErrNoRows) {
 			writeJSON(w, 503, map[string]string{"error": "unable to sign in; try again later"})
 		} else {
-			s.rejectLogin(w, r, u.Username, "invalid assertion or unknown credential")
+			s.rejectLogin(w, r, claimedUsername, "invalid assertion or unknown credential")
 		}
+		return
+	}
+	user, err := s.loadWebAuthnUser(ctx, u)
+	if err != nil {
+		writeJSON(w, 503, map[string]string{"error": "unable to sign in; try again later"})
+		return
+	}
+	// Named login checks the session's account ID and allowlist, and verifies
+	// the optional user handle along with the challenge, RP/origin and signature.
+	cred, err := s.wa.FinishLogin(user, sd, r)
+	if err != nil {
+		s.rejectLogin(w, r, claimedUsername, "invalid assertion or unknown credential")
 		return
 	}
 
@@ -336,14 +355,14 @@ func (s *Server) handleLoginFinish(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, errSessionStore) {
 			writeJSON(w, 503, map[string]string{"error": "session storage unavailable"})
 		} else if errors.Is(err, sql.ErrNoRows) {
-			s.rejectLogin(w, r, u.Username, "device removed")
+			s.rejectLogin(w, r, claimedUsername, "device removed")
 		} else {
 			writeJSON(w, 500, map[string]string{"error": "failed to complete login"})
 		}
 		return
 	}
 	if !ok {
-		s.rejectLogin(w, r, u.Username, "ceremony expired or consumed")
+		s.rejectLogin(w, r, claimedUsername, "ceremony expired or consumed")
 		return
 	}
 

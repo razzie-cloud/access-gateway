@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -8,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -20,25 +22,59 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestLoginBeginHasNoAccountSpecificResponse(t *testing.T) {
-	// There is deliberately no database on this server: initiation must not
-	// inspect account existence, credential count, IDs, or transports.
-	s := unitServer()
-	var err error
-	s.wa, err = webauthn.New(&webauthn.Config{RPID: "auth.example", RPOrigins: []string{s.cfg.Origin}})
-	require.NoError(t, err)
+func TestPostgresLoginBeginFiltersAndPadsAccounts(t *testing.T) {
+	s := postgresServer(t)
+	alice := addUser(t, s, "alice", false)
+	bob := addUser(t, s, "bob", false)
+	addUser(t, s, "unenrolled", false)
+	_, aliceKey := addDevice(t, s, alice, "Phone")
+	_, bobKey := addDevice(t, s, bob, "Short")
+	addDevice(t, s, bob, "Other")
+	addDevice(t, s, bob, "Much longer credential ID")
+	var output bytes.Buffer
+	previous := log.Writer()
+	log.SetOutput(&output)
+	t.Cleanup(func() { log.SetOutput(previous) })
 	var reference map[string]any
+	lists := map[string][]protocol.CredentialDescriptor{}
 	seen := make(map[string]bool)
-	for _, body := range []string{`{}`, `{"username":""}`, `{"username":"alice"}`, `{"username":"unknown"}`} {
+	for _, name := range []string{"alice", "bob", "unknown", "unenrolled", "unknown", "another-unknown"} {
+		body := `{"username":" ` + name + ` "}`
 		w := request(s, "POST", "/api/login/begin", body, "")
-		require.Equal(t, 200, w.Code)
+		require.Equal(t, 200, w.Code, w.Body.String())
 		var options map[string]any
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &options))
+		var assertion protocol.CredentialAssertion
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &assertion))
+		allowed := assertion.Response.AllowedCredentials
+		require.NotEmpty(t, allowed)
+		if before, ok := lists[name]; ok {
+			assert.Equal(t, before, allowed, "repeated queries must keep IDs stable")
+		}
+		lists[name] = allowed
+		var lengths []int
+		var ids [][]byte
+		for _, credential := range allowed {
+			assert.Empty(t, credential.Transport)
+			assert.Equal(t, protocol.PublicKeyCredentialType, credential.Type)
+			lengths = append(lengths, len(credential.CredentialID))
+			ids = append(ids, credential.CredentialID)
+		}
+		if name == "alice" {
+			assert.Contains(t, ids, aliceKey.ID)
+			assert.NotContains(t, ids, bobKey.ID)
+		} else {
+			assert.NotContains(t, ids, aliceKey.ID)
+		}
+		if name != "bob" {
+			assert.NotContains(t, ids, bobKey.ID)
+		}
 		publicKey := options["publicKey"].(map[string]any)
 		challenge := publicKey["challenge"].(string)
 		assert.False(t, seen[challenge])
 		seen[challenge] = true
-		assert.NotContains(t, publicKey, "allowCredentials")
+		// Only the opaque credential values and fresh challenge may differ.
+		publicKey["allowCredentials"] = lengths
 		delete(publicKey, "challenge")
 		if reference == nil {
 			reference = options
@@ -47,13 +83,38 @@ func TestLoginBeginHasNoAccountSpecificResponse(t *testing.T) {
 		}
 		cookies := w.Result().Cookies()
 		require.Len(t, cookies, 1)
-		name, sd, ok, err := s.sessions.GetLogin(t.Context(), cookies[0].Value)
+		claimed, sd, ok, err := s.sessions.GetLogin(t.Context(), cookies[0].Value)
 		require.NoError(t, err)
 		require.True(t, ok)
-		assert.Empty(t, name)
-		assert.Empty(t, sd.UserID)
-		assert.Empty(t, sd.AllowedCredentialIDs)
+		assert.Equal(t, name, claimed)
+		assert.Len(t, sd.UserID, 16)
+		assert.NotEmpty(t, sd.AllowedCredentialIDs)
+		if name == "alice" {
+			assert.Equal(t, alice.ID, sd.UserID)
+			assert.Equal(t, [][]byte{aliceKey.ID}, sd.AllowedCredentialIDs)
+		}
+		assert.Contains(t, output.String(), `login attempt ip="192.0.2.1" claimed_username="`+name+`"`)
+		assert.NotContains(t, output.String(), challenge)
+		assert.NotContains(t, output.String(), cookies[0].Value)
 	}
+	assert.NotEqual(t, lists["unknown"], lists["another-unknown"])
+}
+
+func TestPostgresLoginDecoysSurviveReplicaAndRestart(t *testing.T) {
+	s := postgresServer(t)
+	before, _, err := s.loginCredentials(t.Context(), "unknown")
+	require.NoError(t, err)
+	require.NotEmpty(t, before, "empty database must still return a filter")
+	peer := &Server{db: s.db, cfg: s.cfg}
+	require.NoError(t, peer.ensureLoginSecret(t.Context()))
+	assert.Equal(t, s.loginSecret, peer.loginSecret)
+	after, _, err := peer.loginCredentials(t.Context(), "unknown")
+	require.NoError(t, err)
+	assert.Equal(t, before, after)
+	peer.cfg.Origin = "https://another.example"
+	other, _, err := peer.loginCredentials(t.Context(), "unknown")
+	require.NoError(t, err)
+	assert.NotEqual(t, before, other)
 }
 
 func signingDevice(t *testing.T, s *Server, user User) (*webauthn.Credential, *ecdsa.PrivateKey, int64) {
@@ -109,12 +170,12 @@ func loginFinishRequest(s *Server, sid, body string) *httptest.ResponseRecorder 
 	return w
 }
 
-func TestPostgresDiscoverableLoginSignatureBindingAndReplay(t *testing.T) {
+func TestPostgresNamedLoginSignatureBindingAndReplay(t *testing.T) {
 	s := postgresServer(t)
 	alice := addUser(t, s, "alice", false)
 	bob := addUser(t, s, "bob", false)
 	credential, key, _ := signingDevice(t, s, alice)
-	w := request(s, "POST", "/api/login/begin", `{}`, "")
+	w := request(s, "POST", "/api/login/begin", `{"username":"alice"}`, "")
 	require.Equal(t, 200, w.Code)
 	sid := w.Result().Cookies()[0].Value
 	_, sd, ok, err := s.sessions.GetLogin(t.Context(), sid)
@@ -127,7 +188,6 @@ func TestPostgresDiscoverableLoginSignatureBindingAndReplay(t *testing.T) {
 	}{
 		{"wrong account", bob.ID, sd.Challenge, s.cfg.Origin},
 		{"unknown account", make([]byte, 16), sd.Challenge, s.cfg.Origin},
-		{"missing user handle", nil, sd.Challenge, s.cfg.Origin},
 		{"wrong challenge", alice.ID, "another-challenge-with-enough-entropy", s.cfg.Origin},
 		{"wrong origin", alice.ID, sd.Challenge, "https://evil.example"},
 	} {
@@ -137,6 +197,11 @@ func TestPostgresDiscoverableLoginSignatureBindingAndReplay(t *testing.T) {
 		assert.JSONEq(t, `{"error":"`+loginFailureMessage+`"}`, w.Body.String())
 		assert.Empty(t, w.Result().Cookies())
 	}
+	wrongKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	w = loginFinishRequest(s, sid, signedAssertion(t, s, wrongKey, credential.ID, alice.ID, sd.Challenge, s.cfg.Origin))
+	require.Equal(t, 401, w.Code, "invalid signature must not authenticate")
+	assert.Empty(t, w.Result().Cookies())
 	body := signedAssertion(t, s, key, credential.ID, alice.ID, sd.Challenge, s.cfg.Origin)
 	w = loginFinishRequest(s, sid, body)
 	require.Equal(t, 200, w.Code, w.Body.String())
@@ -154,6 +219,81 @@ func TestPostgresDiscoverableLoginSignatureBindingAndReplay(t *testing.T) {
 	w = loginFinishRequest(s, sid, body)
 	assert.Equal(t, 401, w.Code)
 	assert.Empty(t, w.Result().Cookies())
+}
+
+func TestPostgresNamedLoginAccountBindingAndOptionalHandle(t *testing.T) {
+	s := postgresServer(t)
+	alice := addUser(t, s, "alice", false)
+	bob := addUser(t, s, "bob", false)
+	credential, key, _ := signingDevice(t, s, alice)
+	signingDevice(t, s, bob)
+	var output bytes.Buffer
+	previous := log.Writer()
+	log.SetOutput(&output)
+	t.Cleanup(func() { log.SetOutput(previous) })
+	for _, tc := range []struct {
+		username string
+		handle   []byte
+		status   int
+	}{
+		{"bob", alice.ID, 401},
+		{"bob", nil, 401},
+		{"unknown", alice.ID, 401},
+		{"alice", nil, 200},
+	} {
+		s.limits = newRequestLimits()
+		w := request(s, "POST", "/api/login/begin", `{"username":"`+tc.username+`"}`, "")
+		require.Equal(t, 200, w.Code, w.Body.String())
+		sid := w.Result().Cookies()[0].Value
+		_, sd, ok, err := s.sessions.GetLogin(t.Context(), sid)
+		require.NoError(t, err)
+		require.True(t, ok)
+		body := signedAssertion(t, s, key, credential.ID, tc.handle, sd.Challenge, s.cfg.Origin)
+		w = loginFinishRequest(s, sid, body)
+		require.Equal(t, tc.status, w.Code, w.Body.String())
+		if tc.status == 401 {
+			assert.JSONEq(t, `{"error":"`+loginFailureMessage+`"}`, w.Body.String())
+			assert.Empty(t, w.Result().Cookies())
+			assert.Contains(t, output.String(), `login failed ip="192.0.2.1" claimed_username="`+tc.username+`"`)
+		}
+		assert.NotContains(t, output.String(), body)
+		assert.NotContains(t, output.String(), sid)
+	}
+}
+
+func TestPostgresDummyLoginCannotBecomeValidAfterEnrollment(t *testing.T) {
+	s := postgresServer(t)
+	w := request(s, "POST", "/api/login/begin", `{"username":"alice"}`, "")
+	require.Equal(t, 200, w.Code, w.Body.String())
+	sid := w.Result().Cookies()[0].Value
+	_, sd, _, err := s.sessions.GetLogin(t.Context(), sid)
+	require.NoError(t, err)
+	alice := addUser(t, s, "alice", false)
+	credential, key, _ := signingDevice(t, s, alice)
+	body := signedAssertion(t, s, key, credential.ID, nil, sd.Challenge, s.cfg.Origin)
+	w = loginFinishRequest(s, sid, body)
+	assert.Equal(t, 401, w.Code, w.Body.String())
+	assert.Empty(t, w.Result().Cookies())
+}
+
+func TestLoginFailureLogsClaimedUsername(t *testing.T) {
+	s := unitServer()
+	var err error
+	s.wa, err = webauthn.New(&webauthn.Config{RPID: "auth.example", RPOrigins: []string{s.cfg.Origin}})
+	require.NoError(t, err)
+	var output bytes.Buffer
+	previous := log.Writer()
+	log.SetOutput(&output)
+	t.Cleanup(func() { log.SetOutput(previous) })
+	// Anonymous ceremonies from the old flow must restart. Even that failure
+	// must log a stored claimed name without allowing newline injection.
+	claimed := "alice\nforged log entry"
+	testMemory(s).PutLogin("old", claimed, webauthn.SessionData{})
+	w := loginFinishRequest(s, "old", "secret assertion body")
+	assert.Equal(t, 401, w.Code)
+	assert.Contains(t, output.String(), `claimed_username="alice\nforged log entry"`)
+	assert.NotContains(t, output.String(), "alice\nforged")
+	assert.NotContains(t, output.String(), "secret assertion body")
 }
 
 func TestPostgresDiscoverableReenrollmentOptions(t *testing.T) {

@@ -9,6 +9,10 @@ For local development, run `docker compose up --build` and open
 <http://localhost:8080>. PostgreSQL and Redis are included. Ports 5432 and 8080
 must be free. Redis uses a persistent volume and append-only storage.
 
+Compose builds the checked-out source and tags the gateway image as
+`ghcr.io/razzie-cloud/access-gateway:v1.0.1`. Set `ACCESS_GATEWAY_IMAGE_TAG`
+to override the local build's tag.
+
 To run the Go service directly:
 
 ```sh
@@ -41,25 +45,38 @@ code, name the device and create its passkey. The QR image can also be downloade
 
 Each link registers one passkey for its designated account and expires at the
 displayed time, even if registration is already in progress. A canceled prompt
-can be retried while the link remains valid. After registration, choose
-**Sign in with a passkey** and select the account on your authenticator.
+can be retried while the link remains valid. After registration, enter your
+username and choose **Sign in with a passkey**.
 Multiple devices can have separate passkeys.
 
-Login requires a **discoverable passkey** and does not ask for a username.
-Every login-begin response has the same account-independent options, without
-credential IDs or account lookups. Failed assertions return the same 401
-message; the server logs the client IP, a bounded account name when known, and
-a reason, never cookies or enrollment secrets.
+Login asks for a username and filters the browser's passkey choices to credentials
+registered to that account. The ceremony binds the username, account UUID and
+credential IDs; a different account's passkey cannot complete it. Named login
+also accepts existing non-discoverable credentials and responses without a user
+handle; a supplied handle must match the account.
 
-New registrations request `residentKey=required`. Before upgrading an existing
-installation, generate a registration link while still signed in if your old
-credential is non-discoverable. Use it after upgrading to enroll a discoverable
-passkey. Existing links remain valid until their original expiry; live gateway
-and app sessions are preserved. In-progress login and registration ceremonies
-must be restarted. Legacy credentials with unknown discoverability are omitted from
-enrollment exclusions so the same authenticator can be upgraded. Already
-discoverable credentials can continue signing in. Pre-FIDO2 security keys and
-authenticators without available discoverable storage cannot enroll.
+Unknown usernames and accounts without credentials receive plausible dummy
+options. Every account's list is padded to the same credential-count/ID-length
+profile across the installation, without per-device transport metadata. Dummy
+IDs are derived from a random secret persisted in PostgreSQL `app_states`, scoped
+to `ORIGIN`, so they stay stable across restarts and replicas without extra
+configuration. Do not delete or disclose that secret. This mitigates username
+enumeration, but exposing real credential IDs still has privacy limits: known
+IDs, authenticator-specific ID formats, changes over time and timing differences
+can provide clues. See the [WebAuthn privacy considerations](https://www.w3.org/TR/webauthn-3/#sctn-username-enumeration).
+
+Each valid username submission logs `login attempt` with the client IP and a
+bounded, quoted `claimed_username`, even if the browser prompt is canceled or
+the account does not exist. Failed verification logs the same claimed name and
+a reason, while clients always receive the same 401 message. A claimed username
+is unverified input. Cookies, assertions and enrollment secrets are never logged.
+
+New registrations still request `residentKey=required`; pre-FIDO2 security keys
+and authenticators without available discoverable storage cannot enroll.
+Existing links remain valid until their original expiry; live gateway and app
+sessions are preserved. In-progress ceremonies from older login flows must be
+restarted. Legacy credentials with unknown discoverability are omitted from
+enrollment exclusions so the same authenticator can be upgraded.
 
 Treat links and QR codes like credentials: anyone holding one can register a
 device for that account. Share them privately and use a separate link per device.

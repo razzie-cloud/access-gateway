@@ -38,9 +38,10 @@ type Config struct {
 type Server struct {
 	cfg Config
 
-	db   *sql.DB
-	repo rel.Repository
-	wa   *webauthn.WebAuthn
+	db          *sql.DB
+	repo        rel.Repository
+	wa          *webauthn.WebAuthn
+	loginSecret []byte
 
 	sessions       sessionStore
 	limits         *requestLimits
@@ -103,6 +104,9 @@ func NewServer(cfg Config) (*Server, error) {
 		sessions:       sessions,
 		trustedProxies: proxies,
 		mux:            http.NewServeMux(),
+	}
+	if err := s.ensureLoginSecret(ctx); err != nil {
+		return nil, err
 	}
 	s.routes()
 

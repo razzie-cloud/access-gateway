@@ -145,14 +145,21 @@ absolute registration URLs from untrusted Host or forwarded headers.
 - POST /ui/logout: clears auth and returns the signed-out fragment.
 - GET /api/bootstrap, /api/me; POST /api/register/begin, /api/register/finish,
   /api/login/begin, /api/login/finish, /api/logout: JSON API.
-- Login begin uses BeginDiscoverableLogin without any account lookup or
-  allowCredentials. Legacy username JSON fields are ignored. FinishPasskeyLogin
-  resolves the account using both credential ID and user handle and verifies the
-  assertion before completing the device-bound session. Anonymous ceremonies have
-  an empty username; CompleteLogin binds the verified account when consuming them.
-  Existing named ceremonies retain their store-level account binding, but HTTP
-  clients must restart them after upgrading. All authentication failures return
-  the same 401 message; log bounded, quoted failure metadata only on the server.
+- Login requires a trimmed 1–64-byte username. BeginLogin uses that account's
+  credential IDs, padded with deterministic decoys to a common installation-wide
+  count/ID-length profile. Omit transport metadata. Unknown and unenrolled users
+  follow the same begin path with dummy UUIDs/IDs; never send an empty allowlist.
+  PostgreSQL app_states stores the random login_decoy_secret, shared across
+  replicas/restarts and scoped to ORIGIN when deriving IDs. Never log the secret.
+  Private session data retains only real allowed IDs (a dummy ID for dummy users)
+  because the WebAuthn library requires all stored IDs to be owned by the user.
+  FinishLogin binds the stored username, UUID and allowed IDs, verifying the
+  optional user handle, challenge, RP/origin, flags and signature before creating
+  a device-bound session. Responses without user handles are valid for named
+  login. Old anonymous ceremonies must restart. All authentication failures
+  return the same 401 message. Log bounded, quoted claimed_username at begin
+  (including canceled prompts/unknown names) and failure, never assertion data.
+  Padding mitigates enumeration but cannot eliminate credential-ID privacy leaks.
 - All POSTs require an Origin header matching configured ORIGIN. /api/ POSTs also
   require application/json. Maintain these checks when adding mutation routes.
 - Responses use no-store, no-referrer, nosniff, and a self-only CSP (QR images

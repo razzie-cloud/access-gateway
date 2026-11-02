@@ -56,6 +56,9 @@ func TestBeginRejectsInvalidInput(t *testing.T) {
 		{"long username", "/api/register/begin", `{"username":"` + strings.Repeat("a", 65) + `","token":"bootstrap"}`, "username and bootstrap token required"},
 		{"missing bootstrap token", "/api/register/begin", `{"username":"alice"}`, "username and bootstrap token required"},
 		{"malformed login", "/api/login/begin", `{`, "bad json"},
+		{"empty login", "/api/login/begin", `{}`, "username must contain 1–64 bytes"},
+		{"blank login", "/api/login/begin", `{"username":"  "}`, "username must contain 1–64 bytes"},
+		{"long login", "/api/login/begin", `{"username":"` + strings.Repeat("a", 65) + `"}`, "username must contain 1–64 bytes"},
 		{"unknown login field", "/api/login/begin", `{"username":"alice","unexpected":true}`, "bad json"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
