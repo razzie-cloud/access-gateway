@@ -55,7 +55,7 @@ identity headers. See the [Caddy setup](docs/reference.md#protect-apps-with-cadd
 for a complete example.
 
 For a working multi-app demo, use the
-[razcloud local stack](https://github.com/razzie/razcloud#try-it-locally).
+[razcloud local stack](https://github.com/razzie-cloud/.github#try-it-locally).
 Configuration, enrollment details, operations, and image publishing are in the
 [reference guide](docs/reference.md); development guidance is in
 [AGENTS.md](AGENTS.md).
