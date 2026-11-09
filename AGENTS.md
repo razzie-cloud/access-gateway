@@ -3,7 +3,7 @@
 ## Scope and checks
 
 This directory is the `github.com/razzie-cloud/access-gateway` Go 1.27 module and
-a Git submodule of razcloud. Keep gateway code, migrations, tests, and its docs
+a Git submodule of Razzie Cloud. Keep gateway code, migrations, tests, and its docs
 here. Preserve unrelated parent and infra work. Do not push or deploy without
 authorization. Check the parent AGENTS.md for repository workflow.
 
@@ -39,7 +39,9 @@ for browser WebAuthn APIs and status/HTMX integration.
 
 - `internal/web/templates.html`: Go html/template page and fragment definitions.
 - `internal/web/static/app.js`: WebAuthn bridge and HTMX error rendering.
-- `internal/web/static/app.css`: small PicoCSS layout adjustments.
+- `internal/web/static/app.css`: responsive layout and automatic light/dark PicoCSS
+  overrides. Keep navigation inside the account fragment so authentication state
+  changes refresh it together with the live forms.
 - Vendored HTMX 2.0.8 and PicoCSS 2.1.1 plus licenses live in `static/` and are
   embedded into the executable. Keep asset versions and licenses together.
 - Keep HTMX evaluation, indicator style injection, and history snapshots disabled

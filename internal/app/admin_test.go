@@ -82,7 +82,7 @@ func TestActivityTemplateEscapesMetadataAndHidesUsersForMembers(t *testing.T) {
 	data.User.IsAdmin = false
 	w = httptest.NewRecorder()
 	render(w, httptest.NewRequest("GET", "/ui/activity", nil), 200, "activity", data)
-	assert.NotContains(t, w.Body.String(), "<h3>Users")
+	assert.NotContains(t, w.Body.String(), `id="users"`)
 	data.User = nil
 	w = httptest.NewRecorder()
 	render(w, httptest.NewRequest("GET", "/ui/activity", nil), 200, "activity", data)

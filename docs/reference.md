@@ -84,12 +84,24 @@ their own devices. New accounts are regular users, without admin permissions.
 
 ## Manage devices and sessions
 
+The desktop interface places activity beside device enrollment and user creation.
+Use the sidebar to jump to devices, sessions, users (administrators only), or
+registration links. On small screens the navigation wraps and panels stack.
+The interface follows the browser's light/dark preference without storing a
+theme setting. The header uses the same centered width limit as the main layout.
+Following an anchor to an account panel briefly highlights its outline, including
+repeated activations and panels loaded through HTMX. Ordinary page loads and
+unanchored HTMX updates do not highlight a default panel. Reduced-motion users get
+a temporary static outline. The workspace fills the available frame with equal
+left/right padding. PicoCSS and HTMX are embedded locally; no frontend build is needed.
+
 Every signed-in user can view their own devices and active gateway/application
 sessions. Administrators see all users, UUIDs, devices and sessions. Device names
 identify registered passkeys; each new session records the passkey used to sign
 in, and application sessions inherit that association.
 
-Use **Rename** at any time, including for the current device. **Remove session**
+Open a device's **Manage** disclosure to **Rename** it at any time, including
+the current device, or remove an unused device. **Remove session**
 ends another session; removing a gateway session also revokes its application
 sessions. This browser's session and its application sessions are protected;
 use **Sign out** to end them. A device can be removed once all its sessions have
@@ -307,7 +319,7 @@ git push origin "$RELEASE_TAG"
 
 The tagged commit must include `.github/workflows/publish-image.yml`. Creating
 a new tag through GitHub's release UI also triggers the workflow. Tags in the
-parent razcloud repository do not trigger service builds.
+parent Razzie Cloud repository do not trigger service builds.
 
 The image tag exactly matches the Git tag, including any `v` prefix; no `latest`
 alias is added. Use Docker-compatible tags: 1–128 ASCII letters, digits,

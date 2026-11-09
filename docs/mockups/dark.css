@@ -1,0 +1,95 @@
+/* Dark presentation of the same semantic PicoCSS/HTMX mockups. */
+html:root[data-theme="dark"] {
+  color-scheme: dark;
+  --pico-font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --pico-font-size: 15px; --pico-line-height: 1.55;
+  --pico-background-color: #101722; --pico-color: #dfe7f3;
+  --pico-h1-color: #f0f4fa; --pico-h2-color: #e7edf7; --pico-h3-color: #e7edf7;
+  --pico-muted-color: #a0afc4; --pico-muted-border-color: #2b384c;
+  --pico-primary: #ffcb67; --pico-primary-hover: #ffda94;
+  --pico-primary-background: #ffc34d; --pico-primary-border: #ffc34d;
+  --pico-primary-hover-background: #ffd17b; --pico-primary-hover-border: #ffd17b;
+  --pico-primary-focus: #ffc34d40; --pico-primary-inverse: #17243e;
+  --pico-secondary: #b4c3d9; --pico-secondary-background: #35445b;
+  --pico-secondary-border: #63748e; --pico-secondary-hover: #e1e9f6;
+  --pico-secondary-hover-background: #40526d; --pico-secondary-hover-border: #94a6c0;
+  --pico-secondary-focus: #b4c3d933; --pico-secondary-inverse: #f0f4fa;
+  --pico-form-element-background-color: #121c2a;
+  --pico-form-element-border-color: #42516a;
+  --pico-form-element-color: #e3ebf7;
+  --pico-form-element-placeholder-color: #8c9db5;
+  --pico-form-element-active-background-color: #172233;
+  --pico-form-element-active-border-color: #ffcb67;
+  --pico-form-element-focus-color: #ffc34d30;
+  --pico-form-element-selected-background-color: #ffc34d;
+  --pico-border-radius: .5rem; --pico-card-background-color: #182231;
+  --pico-card-border-color: #2b384c; --pico-card-sectioning-background-color: #1b2739;
+  --pico-card-box-shadow: 0 2px 4px #00000014;
+  --pico-block-spacing-vertical: 1.35rem;
+  --pico-code-background-color: #233147; --pico-code-color: #bacbe3;
+  --pico-dropdown-background-color: #1b2739; --pico-dropdown-border-color: #42516a;
+  --pico-dropdown-color: #dfe7f3; --pico-dropdown-hover-background-color: #29384f;
+  --pico-accordion-active-summary-color: #ffcb67;
+  --pico-accordion-close-summary-color: #b4c3d9;
+  --pico-accordion-open-summary-color: #dfe7f3;
+  --pico-text-selection-color: #ffc34d35;
+}
+[data-theme="dark"] article>header { background: #182231; }
+[data-theme="dark"] .eyebrow { color: #9cacc2; }
+[data-theme="dark"] .topbar { background: #141d2a; border-color: #2b384c; }
+[data-theme="dark"] .brand { color: #f0f4fa; }
+[data-theme="dark"] .service-name { color: #a0afc4; border-color: #354257; }
+[data-theme="dark"] .topbar-right>a { color: #a8b9d1; }
+[data-theme="dark"] .avatar { color: #c3d1e6; background: #26344a; border-color: #35465e; }
+[data-theme="dark"] .identity { border-color: #2b384c; }
+[data-theme="dark"] .preview-bar { background: #1f2b3d; color: #afbdd0; }
+[data-theme="dark"] .preview-bar a { color: #e2c58a; }
+[data-theme="dark"] .app-layout { border-color: #2b384c; }
+[data-theme="dark"] .sidebar { background: #121b28; border-color: #2b384c; }
+[data-theme="dark"] .sidebar nav a { color: #a8b9d1; }
+[data-theme="dark"] .sidebar nav a[aria-current="page"] { color: #ffd27d; background: #3a3226; }
+[data-theme="dark"] .sidebar nav a:hover { background: #243249; }
+[data-theme="dark"] .sidebar-note { color: #9aacc4; border-color: #2b384c; }
+[data-theme="dark"] .sidebar-note .icon { color: #d4b879; }
+[data-theme="dark"] .badge { color: #b7c6dc; background: #2a374b; }
+[data-theme="dark"] .badge.green { color: #a0dcc2; background: #203d35; }
+[data-theme="dark"] .badge.amber { color: #e9c57e; background: #3b3224; }
+[data-theme="dark"] .directory-card:hover { border-color: #a58a52; box-shadow: 0 4px 16px #00000020; }
+[data-theme="dark"] .folder-tile { color: #9bcebb; background: #223b36; border-color: #36534a; }
+[data-theme="dark"] .folder-tile.blue { color: #adc6ed; background: #26364e; border-color: #3a4d6b; }
+[data-theme="dark"] .folder-tile.amber { color: #e9c57e; background: #3b3224; border-color: #5a4a2d; }
+[data-theme="dark"] .directory-card h2 a { color: #e6edf8; }
+[data-theme="dark"] .directory-card code { color: #9fafc7; }
+[data-theme="dark"] .subtle-callout { border-color: #3c4c63; }
+[data-theme="dark"] .workspace-footer { border-color: #2b384c; color: #97a9c2; }
+[data-theme="dark"] nav[aria-label="breadcrumb"] a { color: #a3b4cd; }
+[data-theme="dark"] th,[data-theme="dark"] td { border-color: #2b384c; }
+[data-theme="dark"] thead th { background: #1b2739; color: #a7b8d1; }
+[data-theme="dark"] tbody th,[data-theme="dark"] tbody td { background: #182231; }
+[data-theme="dark"] .name-cell a { color: #e1eaf8; }
+[data-theme="dark"] .file-icon { color: #a4b7d2; background: #26344a; }
+[data-theme="dark"] .file-icon.folder { color: #ebc67c; background: #3b3326; }
+[data-theme="dark"] .file-icon.image { color: #9fd1bc; background: #233b35; }
+[data-theme="dark"] .text-button { color: #ffcb67; }
+[data-theme="dark"] .danger { color: #f1a4a7; }
+[data-theme="dark"] .card-caption { color: #97a9c2; border-color: #2b384c; }
+[data-theme="dark"] .info-list div { border-color: #2b384c; }
+[data-theme="dark"] .info-list dt { color: #a0afc4; }
+[data-theme="dark"] .note { background: #20372f; color: #aed2bf; }
+[data-theme="dark"] .notice { background: #203d30; color: #b4e2c4; border-color: #426b51; }
+[data-theme="dark"] .device-row { border-color: #2b384c; }
+[data-theme="dark"] .device-row details summary { color: #b1c0d6; }
+[data-theme="dark"] .account-strip .avatar { background: #303b50; color: #e9cc8e; }
+[data-theme="dark"] .form-help p { color: #a0afc4; }
+[data-theme="dark"] .form-section { border-color: #2b384c; }
+[data-theme="dark"] .auth-wrap { background: #182231; border-color: #354158; box-shadow: 0 16px 45px #00000030; }
+[data-theme="dark"] .auth-story { background: #1c2940; }
+[data-theme="dark"] .auth-story>p { color: #b0bfd5; }
+[data-theme="dark"] .auth-story>.eyebrow { color: #e9c57e; }
+[data-theme="dark"] .auth-art { border-color: #62604e; }
+[data-theme="dark"] .auth-art::before { border-color: #6b6047; }
+[data-theme="dark"] .auth-art span { color: #ffd078; background: #2a3a55; box-shadow: 0 5px 20px #00000024; }
+[data-theme="dark"] .auth-form>p { color: #a0afc4; }
+[data-theme="dark"] .auth-form .auth-footnote { border-color: #354158; }
+[data-theme="dark"] .share-summary { background: #20382f; color: #afd2bd; border-color: #3b5848; }
+[data-theme="dark"] .skip-link { color: #ffd078; background: #1b2739; }

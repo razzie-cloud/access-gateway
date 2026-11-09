@@ -74,3 +74,47 @@ document.addEventListener("htmx:beforeSwap", (event) => {
 });
 document.addEventListener("htmx:responseError", () => status("The request failed. Please try again."));
 document.addEventListener("htmx:sendError", () => status("Unable to reach the gateway. Please try again."));
+
+
+// Orient navigation within long pages and after server-rendered HTMX updates.
+(() => {
+  let highlighted, timeout;
+  function hashTarget() {
+    try {
+      const target = document.getElementById(decodeURIComponent(location.hash.slice(1)));
+      return target?.matches("[data-navigation-target]") ? target : null;
+    } catch { return null; }
+  }
+  function highlight(target) {
+    clearTimeout(timeout);
+    highlighted?.classList.remove("navigation-highlight");
+    highlighted = null;
+    if (!target) return;
+    // Restart the cue when the same navigation link is activated again.
+    void target.offsetWidth;
+    target.classList.add("navigation-highlight");
+    highlighted = target;
+    timeout = setTimeout(() => {
+      target.classList.remove("navigation-highlight");
+      highlighted = null;
+    }, 1500);
+  }
+  document.addEventListener("DOMContentLoaded", () => {
+    highlight(hashTarget());
+  });
+  window.addEventListener("hashchange", () => highlight(hashTarget()));
+  document.addEventListener("click", event => {
+    const link = event.target.closest("a[href]");
+    if (!link || event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || (link.target && link.target !== "_self")) return;
+    if (link.origin === location.origin && link.pathname === location.pathname && link.search === location.search && link.hash && link.hash === location.hash) highlight(hashTarget());
+  });
+  document.addEventListener("htmx:afterSettle", event => {
+    const updated = event.detail.target || event.detail.elt;
+    if (!(updated instanceof Element)) return;
+    const target = hashTarget();
+    if (!target || !updated.contains(target)) return;
+    // A fragment target may not exist until the activity panel has loaded.
+    target.scrollIntoView({ block: "start", behavior: "auto" });
+    highlight(target);
+  });
+})();
