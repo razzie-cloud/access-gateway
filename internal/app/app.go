@@ -2,10 +2,7 @@ package app
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/sha256"
 	"database/sql"
-	"encoding/hex"
 	"errors"
 	"net/http"
 	"net/netip"
@@ -134,36 +131,4 @@ func (s *Server) Close() error {
 func (s *Server) ListenAndServe() error {
 	server := &http.Server{Addr: s.cfg.ListenAddr, Handler: s.handler(), ErrorLog: logging.ServerLogger()}
 	return server.ListenAndServe()
-}
-
-func (s *Server) ensureBootstrapTokenIfNoUsers(ctx context.Context) error {
-	n, err := s.countUsers(ctx)
-	if err != nil {
-		return err
-	}
-	if n > 0 {
-		return nil
-	}
-
-	hash, err := s.getAppState(ctx, "bootstrap_token_sha256")
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return err
-	}
-	if hash != "" {
-		return nil
-	}
-
-	token := make([]byte, 32)
-	if _, err := rand.Read(token); err != nil {
-		return err
-	}
-	tokenHex := hex.EncodeToString(token)
-
-	sum := sha256.Sum256([]byte(tokenHex))
-	if err := s.setAppState(ctx, "bootstrap_token_sha256", hex.EncodeToString(sum[:])); err != nil {
-		return err
-	}
-
-	logging.BootstrapToken(ctx, tokenHex)
-	return nil
 }

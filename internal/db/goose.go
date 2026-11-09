@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/pressly/goose/v3"
+	"github.com/pressly/goose/v3/lock"
 	"github.com/razzie-cloud/access-gateway/internal/logging"
 )
 
@@ -20,7 +21,11 @@ func RunMigrations(db *sql.DB) error {
 	if err != nil {
 		return err
 	}
-	provider, err := goose.NewProvider(goose.DialectPostgres, db, root, goose.WithLogger(goose.NopLogger()))
+	locker, err := lock.NewPostgresSessionLocker()
+	if err != nil {
+		return err
+	}
+	provider, err := goose.NewProvider(goose.DialectPostgres, db, root, goose.WithSessionLocker(locker), goose.WithLogger(goose.NopLogger()))
 	if err != nil {
 		return err
 	}

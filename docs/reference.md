@@ -124,7 +124,12 @@ because the gateway backend has no published port. Do not use that broader
 setting for a directly exposed gateway.
 
 PostgreSQL stores users, passkeys, and registration links; migrations run at
-startup. Redis stores gateway and app sessions, passkey ceremonies, pending SSO
+startup under a PostgreSQL session advisory lock. Bootstrap token initialization
+and enrollment share a transaction advisory lock, and only the replica that
+commits a new token logs it. Replicas can start together against an empty database.
+When upgrading from images without these locks, avoid overlapping initialization
+with old replicas; schema changes still need compatibility with running code.
+Redis stores gateway and app sessions, passkey ceremonies, pending SSO
 flows, and one-time authorization grants. Gateway restarts preserve these records.
 Replicas must use the same Redis backend/database and public `ORIGIN` to share
 sessions. Keys are namespaced by a hash of `ORIGIN`, and bearer tokens are stored

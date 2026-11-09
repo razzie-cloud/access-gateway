@@ -85,6 +85,9 @@ func (s *Server) completeRegistration(ctx context.Context, registration registra
 			return err
 		}
 	} else {
+		if err := lockBootstrap(ctx, tx); err != nil {
+			return err
+		}
 		var storedHash string
 		err = tx.QueryRowContext(ctx, `SELECT value FROM app_states WHERE key='bootstrap_token_sha256' FOR UPDATE`).Scan(&storedHash)
 		if errors.Is(err, sql.ErrNoRows) {

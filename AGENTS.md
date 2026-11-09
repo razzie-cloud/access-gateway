@@ -56,6 +56,8 @@ applies security headers and Origin/content-type checks around the HTTP mux.
 `registration.go` owns token hashing, lifetime bounds, and transactional enrollment.
 `store.go` uses go-rel for user/credential reads and login credential updates.
 New enrollment uses database/sql transactions through the same underlying DB.
+Goose uses a PostgreSQL session advisory lock before migration discovery and
+execution, including creation of the migration version table.
 
 Configuration: SERVICE_PORT (8080), POSTGRES_URI (required, or
 POSTGRES_URI_FROM), POSTGRES_PASSWORD_FILE, ORIGIN (http://localhost:8080),
@@ -85,6 +87,11 @@ absolute registration URLs from untrusted Host or forwarded headers.
   app_states row, checks that no users exist, inserts admin and credential, and
   deletes bootstrap state in one transaction. Competing finishes must yield
   exactly one account. Failed/canceled ceremonies leave bootstrap retryable.
+- Token initialization and bootstrap enrollment acquire the same PostgreSQL
+  transaction advisory lock before checking users/token state. Initialization
+  inserts the hash with ON CONFLICT DO NOTHING and logs only after the winning
+  transaction commits. Never overwrite an existing token or recreate one after
+  enrollment. All participating gateway replicas must run this locking protocol.
 - Links use 32 cryptographically random bytes, hex encoded. PostgreSQL and
   registration sessions store SHA-256 hashes, never raw tokens. Links bind to
   a user ID and contain expires_at/used_at/created_at Unix timestamps.
