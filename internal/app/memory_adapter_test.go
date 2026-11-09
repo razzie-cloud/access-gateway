@@ -72,9 +72,9 @@ func (m memorySessionStore) authorizeAppLogin(_ context.Context, f, p string) (s
 	c, ok := m.mem.authorizeAppLogin(f, p)
 	return c, ok, nil
 }
-func (m memorySessionStore) completeAppLogin(_ context.Context, f, c, s, o string) (string, string, bool, error) {
-	v, t, ok := m.mem.completeAppLogin(f, c, s, o)
-	return v, t, ok, nil
+func (m memorySessionStore) completeAppLogin(_ context.Context, f, c, s, o string) (string, string, time.Duration, bool, error) {
+	v, t, ttl, ok := m.mem.completeAppLogin(f, c, s, o)
+	return v, t, ttl, ok, nil
 }
 func (m memorySessionStore) getAppAuth(_ context.Context, t, o string) (string, bool, error) {
 	n, ok := m.mem.getAppAuth(t, o)

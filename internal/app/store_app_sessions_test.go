@@ -42,7 +42,7 @@ func TestAppLoginBindingsAndExpiry(t *testing.T) {
 				m.DeleteAuth("parent")
 			}
 			m.flows[originalFlowID] = flow
-			token, target, ok := m.completeAppLogin(flowID, code, state, origin)
+			token, target, _, ok := m.completeAppLogin(flowID, code, state, origin)
 			assert.False(t, ok)
 			assert.Empty(t, token)
 			assert.Empty(t, target)
@@ -62,7 +62,7 @@ func TestAppLoginConcurrentConsumption(t *testing.T) {
 	var group sync.WaitGroup
 	for i := 0; i < 24; i++ {
 		group.Go(func() {
-			token, target, ok := m.completeAppLogin(flow, code, state, testAppOrigin)
+			token, target, _, ok := m.completeAppLogin(flow, code, state, testAppOrigin)
 			if ok {
 				wins.Add(1)
 				assert.NotEmpty(t, token)
@@ -84,7 +84,7 @@ func TestAppSessionsRequireLiveParentAndCorrectOrigin(t *testing.T) {
 	assert.False(t, ok)
 	code, ok := m.authorizeAppLogin(flow, "parent")
 	require.True(t, ok)
-	token, _, ok := m.completeAppLogin(flow, code, state, testAppOrigin)
+	token, _, _, ok := m.completeAppLogin(flow, code, state, testAppOrigin)
 	require.True(t, ok)
 	_, ok = m.getAppAuth(token, "https://other.example")
 	assert.False(t, ok)

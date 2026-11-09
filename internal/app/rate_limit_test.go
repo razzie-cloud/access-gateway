@@ -137,7 +137,7 @@ func TestForwardAuthRateLimitDoesNotAllocateMoreFlows(t *testing.T) {
 	require.True(t, ok)
 	code, ok := testMemory(s).authorizeAppLogin(flow, "parent")
 	require.True(t, ok)
-	token, _, ok := testMemory(s).completeAppLogin(flow, code, state, testAppOrigin)
+	token, _, _, ok := testMemory(s).completeAppLogin(flow, code, state, testAppOrigin)
 	require.True(t, ok)
 	for _, endpoint := range []string{"/forward_auth", "/forward_auth/admin"} {
 		r := httptest.NewRequest("GET", endpoint, nil)

@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"errors"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -69,26 +70,34 @@ if flow.Origin ~= ARGV[1] or flow.StateHash ~= ARGV[2] or grant.Flow ~= ARGV[3] 
 if not redis.call('SET', KEYS[4], ARGV[5], 'NX', 'PX', ttl) then return nil end
 redis.call('DEL', KEYS[1], KEYS[2])
 redis.call('ZREM', KEYS[5], ARGV[3])
-return flow.ReturnTo
+return {flow.ReturnTo, ttl}
 `)
 
-func (s *redisSessions) completeAppLogin(ctx context.Context, flowID, code, state, origin string) (string, string, bool, error) {
+func (s *redisSessions) completeAppLogin(ctx context.Context, flowID, code, state, origin string) (string, string, time.Duration, bool, error) {
 	grant, ok, err := getSession[redisGrant](ctx, s, s.key("grant", code))
 	if err != nil || !ok {
-		return "", "", false, err
+		return "", "", 0, false, err
 	}
 	token := rand.Text()
 	payload, _ := json.Marshal(redisApp{Origin: origin, Parent: grant.Parent})
 	keys := []string{s.key("flow", flowID), s.key("grant", code), s.prefix + "auth:" + grant.Parent, s.key("app", token), s.prefix + "flows"}
-	returnTo, err := completeAppFlow.Run(ctx, s.client, keys, origin, hashToken(state), hashToken(flowID), grant.Parent, payload).Text()
+	result, err := completeAppFlow.Run(ctx, s.client, keys, origin, hashToken(state), hashToken(flowID), grant.Parent, payload).Slice()
 	if errors.Is(err, redis.Nil) {
-		return "", "", false, nil
+		return "", "", 0, false, nil
 	}
 	if err != nil {
-		return "", "", false, sessionStoreError(err)
+		return "", "", 0, false, sessionStoreError(err)
 	}
 	s.cache.delete(keys[0], keys[1])
-	return token, returnTo, true, nil
+	if len(result) != 2 {
+		return "", "", 0, false, sessionStoreError(errors.New("invalid app session result"))
+	}
+	returnTo, targetOK := result[0].(string)
+	ttl, ttlOK := result[1].(int64)
+	if !targetOK || !ttlOK || ttl <= 0 {
+		return "", "", 0, false, sessionStoreError(errors.New("invalid app session result"))
+	}
+	return token, returnTo, time.Duration(ttl) * time.Millisecond, true, nil
 }
 
 func (s *redisSessions) getAppAuth(ctx context.Context, token, origin string) (string, bool, error) {

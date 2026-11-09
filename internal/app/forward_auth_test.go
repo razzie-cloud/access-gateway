@@ -152,11 +152,44 @@ func TestAuthorizeUsesExistingGatewaySession(t *testing.T) {
 	assert.Empty(t, cookies[0].Domain)
 	assert.True(t, cookies[0].Secure)
 	assert.True(t, cookies[0].HttpOnly)
+	assert.InDelta(t, authTTL.Seconds(), cookies[0].MaxAge, 1)
 	assert.Equal(t, state.Name, cookies[1].Name)
 	assert.Equal(t, -1, cookies[1].MaxAge)
 	w = forwardRequest(s, testAppOrigin, callback.RequestURI(), state)
 	assert.Equal(t, http.StatusBadRequest, w.Code, "callback replay was accepted")
 	assert.Empty(t, w.Header().Get("Set-Cookie"))
+}
+
+func TestAppCookieUsesRemainingGatewayLifetime(t *testing.T) {
+	for _, origin := range []string{testAppOrigin, "http://files.localhost:8082"} {
+		for _, remaining := range []time.Duration{2 * time.Hour, 500 * time.Millisecond} {
+			t.Run(origin+"/"+remaining.String(), func(t *testing.T) {
+				s := unitServer()
+				s.cfg.ForwardAuthOrigins = []string{origin}
+				testMemory(s).auth["central"] = authEntry{username: "alice", exp: time.Now().Add(remaining)}
+				authorize, state := startAppLogin(t, s, origin, "/notes")
+				w := request(s, "GET", authorize, "", "central")
+				require.Equal(t, http.StatusSeeOther, w.Code)
+				callback, err := url.Parse(w.Header().Get("Location"))
+				require.NoError(t, err)
+				w = forwardRequest(s, origin, callback.RequestURI(), state)
+				require.Equal(t, http.StatusSeeOther, w.Code)
+				cookies := w.Result().Cookies()
+				require.Len(t, cookies, 2)
+				cookie := cookies[0]
+				assert.Positive(t, cookie.MaxAge, "app cookie must survive a browser restart")
+				assert.InDelta(t, max(1, int(remaining.Seconds())), cookie.MaxAge, 1)
+				assert.Equal(t, http.SameSiteLaxMode, cookie.SameSite)
+				assert.True(t, cookie.HttpOnly)
+				assert.Equal(t, strings.HasPrefix(origin, "https://"), cookie.Secure)
+				assert.Empty(t, cookie.Domain)
+				testMemory(s).DeleteAuth("central")
+				_, ok, err := s.sessions.getAppAuth(t.Context(), cookie.Value, origin)
+				require.NoError(t, err)
+				assert.False(t, ok, "persistent cookie must not bypass parent revocation")
+			})
+		}
+	}
 }
 
 func TestAppCallbackRequiresBrowserState(t *testing.T) {
@@ -296,7 +329,7 @@ func TestForwardAuthFailsClosedOnUserLookup(t *testing.T) {
 		code, ok, err := s.sessions.authorizeAppLogin(t.Context(), flow, "alice-session")
 		require.NoError(t, err)
 		require.True(t, ok)
-		token, _, ok, err := s.sessions.completeAppLogin(t.Context(), flow, code, state, testAppOrigin)
+		token, _, _, ok, err := s.sessions.completeAppLogin(t.Context(), flow, code, state, testAppOrigin)
 		require.NoError(t, err)
 		require.True(t, ok)
 		if brokenDB {

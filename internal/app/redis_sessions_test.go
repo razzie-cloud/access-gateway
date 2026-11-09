@@ -113,7 +113,7 @@ func mintRedisAppSession(t *testing.T, s *redisSessions, parent string) string {
 	code, ok, err := s.authorizeAppLogin(t.Context(), flow, parent)
 	require.NoError(t, err)
 	require.True(t, ok)
-	token, target, ok, err := s.completeAppLogin(t.Context(), flow, code, state, testAppOrigin)
+	token, target, _, ok, err := s.completeAppLogin(t.Context(), flow, code, state, testAppOrigin)
 	require.NoError(t, err)
 	require.True(t, ok)
 	assert.Equal(t, testAppOrigin+"/private", target)
@@ -151,6 +151,28 @@ func TestRedisLogoutAndExpiryRejectWarmCaches(t *testing.T) {
 			assert.False(t, ok)
 		})
 	}
+}
+
+func TestRedisAppSessionReturnsRemainingParentLifetime(t *testing.T) {
+	s := testRedisSessions(t, "")
+	ctx := t.Context()
+	require.NoError(t, s.PutAuth(ctx, "parent", "alice"))
+	const remaining = 2 * time.Hour
+	require.NoError(t, s.client.PExpire(ctx, s.key("auth", "parent"), remaining).Err())
+	flow, state, err := s.beginAppLogin(ctx, testAppOrigin, testAppOrigin+"/private")
+	require.NoError(t, err)
+	code, ok, err := s.authorizeAppLogin(ctx, flow, "parent")
+	require.NoError(t, err)
+	require.True(t, ok)
+	token, target, ttl, ok, err := s.completeAppLogin(ctx, flow, code, state, testAppOrigin)
+	require.NoError(t, err)
+	require.True(t, ok)
+	assert.Equal(t, testAppOrigin+"/private", target)
+	assert.Positive(t, ttl)
+	assert.LessOrEqual(t, ttl, remaining)
+	assert.InDelta(t, remaining.Milliseconds(), ttl.Milliseconds(), 1000)
+	assert.InDelta(t, ttl.Milliseconds(), s.client.PTTL(ctx, s.key("app", token)).Val().Milliseconds(), 1000)
+	assert.InDelta(t, ttl.Milliseconds(), s.client.PTTL(ctx, s.key("auth", "parent")).Val().Milliseconds(), 1000)
 }
 
 func TestRedisFailureDeniesCachedSessions(t *testing.T) {
@@ -234,7 +256,7 @@ func TestRedisCallbackIsConsumedOnceAcrossReplicas(t *testing.T) {
 		case "flow":
 			f = "wrong"
 		}
-		_, _, ok, err := s.completeAppLogin(ctx, f, c, v, o)
+		_, _, _, ok, err := s.completeAppLogin(ctx, f, c, v, o)
 		require.NoError(t, err)
 		assert.False(t, ok, mismatch)
 	}
@@ -246,7 +268,7 @@ func TestRedisCallbackIsConsumedOnceAcrossReplicas(t *testing.T) {
 			if i%2 == 1 {
 				store = peer
 			}
-			token, target, ok, err := store.completeAppLogin(ctx, flow, code, state, testAppOrigin)
+			token, target, _, ok, err := store.completeAppLogin(ctx, flow, code, state, testAppOrigin)
 			assert.NoError(t, err)
 			if ok {
 				wins.Add(1)
@@ -275,7 +297,7 @@ func TestRedisHandoffExpiryAndLogout(t *testing.T) {
 			require.True(t, ok)
 			keys := map[string]string{"flow": s.key("flow", flow), "grant": s.key("grant", code), "parent": s.key("auth", "parent")}
 			require.NoError(t, s.client.PExpireAt(ctx, keys[expired], time.Now().Add(-time.Second)).Err())
-			_, _, ok, err = s.completeAppLogin(ctx, flow, code, state, testAppOrigin)
+			_, _, _, ok, err = s.completeAppLogin(ctx, flow, code, state, testAppOrigin)
 			require.NoError(t, err)
 			assert.False(t, ok)
 		})

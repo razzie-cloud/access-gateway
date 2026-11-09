@@ -388,7 +388,7 @@ func (s *Server) handleLoginFinish(w http.ResponseWriter, r *http.Request) {
 	}
 
 	logging.For(r.Context()).Info("Login succeeded", "event", "login.succeeded", "user_id", userID(u.ID), "client_ip", s.clientIP(r).String())
-	s.setCookie(w, "auth", authHex, 0)
+	s.setCookie(w, "auth", authHex, int(authTTL.Seconds()))
 
 	s.setCookie(w, "sid", "", -1)
 

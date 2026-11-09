@@ -271,6 +271,11 @@ App cookies are host-only, HttpOnly, SameSite=Lax, and Secure on HTTPS, with
 `__Host-razcloud_app` as the HTTPS cookie name (`razcloud_app` on loopback HTTP).
 The gateway's `auth` cookie is also Lax to permit top-level cross-site sign-in;
 ceremony cookies remain Strict and all POSTs still require the configured Origin.
+Gateway and app login cookies persist across browser restarts. Gateway sessions
+expire seven days after sign-in; app cookies use the parent gateway session's
+remaining lifetime. Activity does not extend that deadline, and Redis enforces
+expiry on every authorization check. Existing browser-session cookies become
+persistent after the next sign-in and app callback following an upgrade.
 The central cookie is never copied to an app, and app tokens cannot sign in to
 the gateway or another app origin. Signing out at the gateway invalidates all
 app sessions derived from that gateway session. Deleting a user denies their

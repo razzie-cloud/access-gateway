@@ -175,6 +175,9 @@ absolute registration URLs from untrusted Host or forwarded headers.
   for top-level navigation between unrelated sites. POST Origin checks remain.
 - Redis stores ceremonies (30 minutes), auth sessions (7 days), app sessions
   (bounded by parent auth TTL), SSO flows (10 minutes), and grants (1 minute).
+  Gateway and app login cookies persist across browser restarts; the gateway
+  cookie uses the auth TTL and app cookies use the remaining parent TTL returned
+  by atomic SSO redemption. Activity must not extend the server-side deadline.
   WebAuthn challenge expiry and link expiry may be earlier. Replicas share a
   namespace derived from ORIGIN and require the same Redis database/config.
   Gateway restarts preserve sessions; Redis durability depends on its backend.

@@ -33,7 +33,7 @@ type sessionStore interface {
 	beginAppLogin(context.Context, string, string) (string, string, error)
 	appLogin(context.Context, string) (appLoginFlow, bool, error)
 	authorizeAppLogin(context.Context, string, string) (string, bool, error)
-	completeAppLogin(context.Context, string, string, string, string) (string, string, bool, error)
+	completeAppLogin(context.Context, string, string, string, string) (string, string, time.Duration, bool, error)
 	getAppAuth(context.Context, string, string) (string, bool, error)
 	ListSessions(context.Context) ([]sessionSummary, error)
 	DeleteSession(context.Context, string, string) error

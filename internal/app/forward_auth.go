@@ -242,7 +242,7 @@ func (s *Server) handleAppCallback(w http.ResponseWriter, r *http.Request, origi
 		http.Error(w, "Missing sign-in state; return to the app and try again", http.StatusBadRequest)
 		return
 	}
-	token, returnTo, ok, err := s.sessions.completeAppLogin(r.Context(), flowID, query.Get("code"), cookie.Value, origin)
+	token, returnTo, ttl, ok, err := s.sessions.completeAppLogin(r.Context(), flowID, query.Get("code"), cookie.Value, origin)
 	if err != nil {
 		logging.Fail(r.Context(), slog.LevelError, "redis", err)
 		http.Error(w, "Session storage unavailable", http.StatusServiceUnavailable)
@@ -252,7 +252,10 @@ func (s *Server) handleAppCallback(w http.ResponseWriter, r *http.Request, origi
 		http.Error(w, "Invalid or expired sign-in; return to the app and try again", http.StatusBadRequest)
 		return
 	}
-	setAppCookie(w, origin, "app", token, 0)
+	// Persist across browser restarts without starting a fresh auth lifetime.
+	// A subsecond TTL still needs a positive MaxAge to avoid a session cookie;
+	// Redis enforces the exact deadline on every authorization check.
+	setAppCookie(w, origin, "app", token, max(1, int(ttl.Seconds())))
 	setAppCookie(w, origin, "state_"+flowID, "", -1)
 	http.Redirect(w, r, returnTo, http.StatusSeeOther)
 }

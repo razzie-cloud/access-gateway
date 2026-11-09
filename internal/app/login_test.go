@@ -212,6 +212,7 @@ func TestPostgresNamedLoginSignatureBindingAndReplay(t *testing.T) {
 		}
 	}
 	require.NotNil(t, auth)
+	assert.Equal(t, int(authTTL.Seconds()), auth.MaxAge, "login must survive a browser restart")
 	name, ok, err := s.sessions.GetAuth(t.Context(), auth.Value)
 	require.NoError(t, err)
 	require.True(t, ok)

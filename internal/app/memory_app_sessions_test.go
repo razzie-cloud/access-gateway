@@ -56,7 +56,7 @@ func (m *MemorySessions) authorizeAppLogin(flowID, parent string) (string, bool)
 	return code, true
 }
 
-func (m *MemorySessions) completeAppLogin(flowID, code, state, origin string) (string, string, bool) {
+func (m *MemorySessions) completeAppLogin(flowID, code, state, origin string) (string, string, time.Duration, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	flow, ok := m.flows[flowID]
@@ -67,12 +67,12 @@ func (m *MemorySessions) completeAppLogin(flowID, code, state, origin string) (s
 		!authenticated || !now.Before(auth.exp) ||
 		subtle.ConstantTimeCompare([]byte(state), []byte(flow.state)) != 1 ||
 		subtle.ConstantTimeCompare(codeHash[:], flow.codeHash[:]) != 1 {
-		return "", "", false
+		return "", "", 0, false
 	}
 	delete(m.flows, flowID)
 	token := rand.Text()
 	m.apps[token] = appSession{origin: origin, parent: flow.parent}
-	return token, flow.returnTo, true
+	return token, flow.returnTo, auth.exp.Sub(now), true
 }
 
 func (m *MemorySessions) getAppAuth(token, origin string) (string, bool) {
