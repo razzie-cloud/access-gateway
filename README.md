@@ -46,7 +46,7 @@ For a public installation, use HTTPS and set:
 | `RP_ID` | `auth.example.com`, the passkey relying-party hostname |
 | `POSTGRES_URI` | PostgreSQL connection URI, or use `POSTGRES_URI_FROM` for broker discovery |
 | `REDIS_URI` | Redis connection URI, or use `REDIS_URI_FROM` for broker discovery |
-| `FORWARD_AUTH_ORIGINS` | Exact allowed app origins, e.g. `https://app.example.com` |
+| `FORWARD_AUTH_ORIGINS` | Allowed app origins, e.g. `https://app.example.com` or `https://*.example.com` (subdomains only; exact scheme/port) |
 
 Configure Caddy to check every app path through `/forward_auth` (or
 `/forward_auth/admin`) and pass the verified `X-Auth-Request-User` UUID and

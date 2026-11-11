@@ -19,7 +19,7 @@ type Config struct {
 	Origin               string `arg:"--origin,env:ORIGIN" default:"http://localhost:8080"`
 	RPID                 string `arg:"--rp-id,env:RP_ID" default:"localhost"`
 	RPName               string `arg:"--rp-name,env:RP_NAME" default:"Minimal WebAuthn"`
-	ForwardAuthOrigins   string `arg:"--forward-auth-origins,env:FORWARD_AUTH_ORIGINS" help:"Comma-separated exact public app origins allowed to use forward auth"`
+	ForwardAuthOrigins   string `arg:"--forward-auth-origins,env:FORWARD_AUTH_ORIGINS" help:"Comma-separated public app origins allowed to use forward auth (supports leading *. subdomain wildcards)"`
 	TrustedProxies       string `arg:"--trusted-proxies,env:TRUSTED_PROXIES" help:"Comma-separated proxy IPs/CIDRs trusted to supply X-Forwarded-For"`
 	PostgresURI          string `arg:"--postgres-uri,env:POSTGRES_URI"`
 	PostgresURIFrom      string `arg:"--postgres-uri-from,env:POSTGRES_URI_FROM"`

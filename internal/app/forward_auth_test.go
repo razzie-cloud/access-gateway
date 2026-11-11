@@ -41,16 +41,23 @@ func TestForwardAuthConfig(t *testing.T) {
 		"https://app.example.net", "https://app.example.net:8443/",
 		"http://localhost:8081", "http://127.0.0.1:8082", "http://[::1]:8083",
 		"http://files.localhost:8082", "http://Files.Localhost:8082", "http://files.wsl.localhost:8082",
+		"https://*.example.net", "https://*.EXAMPLE.net:8443/", "http://*.localhost:8082",
+		"http://*.wsl.localhost:8082", "https://*.auth.example",
 	} {
 		assert.NoError(t, validateForwardAuthConfig(Config{Origin: "https://auth.example", ForwardAuthOrigins: []string{origin}}))
 	}
 	for _, origin := range []string{
-		"", "//app.example.net", "https://*.example.net", "http://app.example.net", "ftp://app.example.net",
+		"", "//app.example.net", "http://app.example.net", "ftp://app.example.net",
 		"https://app.example.net/path", "https://app.example.net?next=evil", "https://app.example.net#evil",
 		"https://user@app.example.net", "https://app.example.net,evil.example", "https://auth.example",
 		"https://app.example.net:bad", "https://app.example.net\\evil",
 		"http://files.localhost.example:8082", "http://notlocalhost:8082", "http://files-localhost:8082",
-		"http://files.localhost@evil.example:8082", "http://*.localhost:8082",
+		"http://files.localhost@evil.example:8082", "http://*.example.net",
+		"https://*", "https://*example.net", "https://app.*.example.net", "https://*.*.example.net",
+		"https://*.example.net/path", "https://*.example.net?next=evil", "https://*.example.net#evil",
+		"https://user@*.example.net", "https://*.example.net:bad", "https://*.example.net\\evil",
+		"https://*.127.0.0.1", "https://*.[::1]", "https://*..example.net", "https://*.example.net.",
+		"https://*.-example.net", "https://*.example-.net", "https://*.exam_ple.net",
 	} {
 		t.Run(origin, func(t *testing.T) {
 			cfg := Config{Origin: "https://auth.example", ForwardAuthOrigins: []string{origin}}
@@ -60,6 +67,89 @@ func TestForwardAuthConfig(t *testing.T) {
 		})
 	}
 	assert.Error(t, validateForwardAuthConfig(Config{Origin: "https://auth.example/path", ForwardAuthOrigins: []string{testAppOrigin}}))
+	assert.Error(t, validateForwardAuthConfig(Config{Origin: "https://*.example.net", ForwardAuthOrigins: []string{testAppOrigin}}))
+}
+
+func TestForwardAuthWildcardOrigins(t *testing.T) {
+	s := unitServer()
+	s.cfg.Origin = "https://auth.razzie.cloud"
+	s.cfg.ForwardAuthOrigins = []string{"https://*.razzie.cloud", "https://*.ports.example:8443/", "http://*.localhost:8082", testAppOrigin}
+	require.NoError(t, validateForwardAuthConfig(s.cfg))
+	for _, tc := range []struct {
+		origin  string
+		allowed bool
+	}{
+		{"https://files.razzie.cloud", true},
+		{"https://nested.files.razzie.cloud", true},
+		{"https://FILES.RAZZIE.CLOUD", true},
+		{"https://my-app.razzie.cloud", true},
+		{"https://app.ports.example:8443", true},
+		{"http://files.localhost:8082", true},
+		{testAppOrigin, true},
+		{"https://razzie.cloud", false},
+		{"https://auth.razzie.cloud", false},
+		{"https://AUTH.RAZZIE.CLOUD", false},
+		{"https://evilrazzie.cloud", false},
+		{"https://files.razzie.cloud.evil", false},
+		{"https://files.razzie.cloud:443", false},
+		{"https://files.razzie.cloud:8443", false},
+		{"http://files.razzie.cloud", false},
+		{"https://app.ports.example", false},
+		{"https://app.ports.example:443", false},
+		{"http://files.localhost:8083", false},
+		{"https://files.localhost:8082", false},
+		{"https://*.razzie.cloud", false},
+		{"https://.razzie.cloud", false},
+		{"https://files..razzie.cloud", false},
+		{"https://-files.razzie.cloud", false},
+		{"https://files_.razzie.cloud", false},
+	} {
+		t.Run(tc.origin, func(t *testing.T) {
+			assert.Equal(t, tc.allowed, s.allowedAppOrigin(tc.origin))
+			for _, endpoint := range []string{"/forward_auth", "/forward_auth/admin"} {
+				w := forwardRequestTo(s, endpoint, tc.origin, "/private")
+				if tc.allowed {
+					assert.Equal(t, http.StatusSeeOther, w.Code)
+				} else {
+					assert.Equal(t, http.StatusBadRequest, w.Code)
+					assert.Empty(t, w.Header().Get("Location"))
+					assert.Empty(t, w.Header().Get("Set-Cookie"))
+				}
+			}
+		})
+	}
+}
+
+func TestWildcardAppLoginBindsConcreteOrigin(t *testing.T) {
+	s := unitServer()
+	s.cfg.ForwardAuthOrigins = []string{"https://*.example.net"}
+	testMemory(s).PutAuth("central", "alice")
+	const otherOrigin = "https://other.example.net"
+	authorize, state := startAppLogin(t, s, testAppOrigin, "/private?q=hello")
+	w := request(s, "GET", authorize, "", "central")
+	require.Equal(t, http.StatusSeeOther, w.Code)
+	callback, err := url.Parse(w.Header().Get("Location"))
+	require.NoError(t, err)
+	assert.Equal(t, "app.example.net", callback.Host)
+
+	// A sibling matching the same wildcard cannot redeem this app's grant.
+	w = forwardRequest(s, otherOrigin, callback.RequestURI(), state)
+	require.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Empty(t, w.Header().Get("Set-Cookie"))
+	w = forwardRequest(s, testAppOrigin, callback.RequestURI(), state)
+	require.Equal(t, http.StatusSeeOther, w.Code)
+	assert.Equal(t, testAppOrigin+"/private?q=hello", w.Header().Get("Location"))
+	cookies := w.Result().Cookies()
+	require.Len(t, cookies, 2)
+	assert.Empty(t, cookies[0].Domain)
+	username, ok, err := s.sessions.getAppAuth(t.Context(), cookies[0].Value, testAppOrigin)
+	require.NoError(t, err)
+	require.True(t, ok)
+	assert.Equal(t, "alice", username)
+	_, ok, err = s.sessions.getAppAuth(t.Context(), cookies[0].Value, otherOrigin)
+	require.NoError(t, err)
+	assert.False(t, ok)
+	startAppLogin(t, s, otherOrigin, "/private", cookies[0])
 }
 
 func TestForwardAuthRejectsUntrustedTargets(t *testing.T) {

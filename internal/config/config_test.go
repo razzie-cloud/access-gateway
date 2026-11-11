@@ -52,7 +52,7 @@ func TestLoadGatewaySettings(t *testing.T) {
 				{"ORIGIN", "--origin", "https://login.example.com"},
 				{"RP_ID", "--rp-id", "example.com"},
 				{"RP_NAME", "--rp-name", "Gateway"},
-				{"FORWARD_AUTH_ORIGINS", "--forward-auth-origins", "https://app.example.com,https://other.example.net"},
+				{"FORWARD_AUTH_ORIGINS", "--forward-auth-origins", "https://app.example.com,https://*.example.net"},
 				{"REDIS_URI", "--redis-uri", "redis://sessions:6379/0"},
 				{"TRUSTED_PROXIES", "--trusted-proxies", "10.0.0.0/24,127.0.0.1"},
 				{"LANDING_ORIGIN", "--landing-origin", "http://localhost:9191"},

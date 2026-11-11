@@ -18,7 +18,7 @@ import (
 const appCallbackPath = "/_auth/callback"
 
 // publicOrigin accepts HTTPS origins and loopback HTTP origins for development.
-// Exact origins, rather than suffixes, keep apps from choosing arbitrary callbacks.
+// Request origins must be concrete, even when the allowlist contains wildcards.
 func publicOrigin(raw string) (string, error) {
 	u, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil || u.Host == "" || u.Hostname() == "" || u.User != nil || u.Opaque != "" ||
@@ -39,6 +39,54 @@ func publicOrigin(raw string) (string, error) {
 	return u.Scheme + "://" + strings.ToLower(u.Host), nil
 }
 
+type appOriginPattern struct {
+	origin   string
+	wildcard bool
+}
+
+// Wildcards cover complete subdomain labels only. Parse the suffix as a public
+// origin so scheme, port and local-development restrictions remain the same.
+func parseAppOriginPattern(raw string) (appOriginPattern, error) {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err == nil && strings.HasPrefix(u.Host, "*.") {
+		u.Host = strings.TrimPrefix(u.Host, "*.")
+		if !dnsHostname(u.Hostname()) || net.ParseIP(u.Hostname()) != nil {
+			return appOriginPattern{}, fmt.Errorf("invalid wildcard app origin %q", raw)
+		}
+		origin, err := publicOrigin(u.String())
+		return appOriginPattern{origin: origin, wildcard: true}, err
+	}
+	origin, err := publicOrigin(raw)
+	return appOriginPattern{origin: origin}, err
+}
+
+func dnsHostname(host string) bool {
+	if len(host) == 0 || len(host) > 253 {
+		return false
+	}
+	for _, label := range strings.Split(host, ".") {
+		if len(label) == 0 || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for _, c := range label {
+			if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-') {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func (p appOriginPattern) matches(origin string) bool {
+	if !p.wildcard {
+		return origin == p.origin
+	}
+	u, _ := url.Parse(origin) // Callers pass validated concrete public origins.
+	base, _ := url.Parse(p.origin)
+	return u.Scheme == base.Scheme && u.Port() == base.Port() &&
+		dnsHostname(u.Hostname()) && strings.HasSuffix(u.Hostname(), "."+base.Hostname())
+}
+
 func validateForwardAuthConfig(cfg Config) error {
 	if len(cfg.ForwardAuthOrigins) == 0 {
 		return nil
@@ -48,11 +96,11 @@ func validateForwardAuthConfig(cfg Config) error {
 		return fmt.Errorf("forward auth gateway: %w", err)
 	}
 	for _, raw := range cfg.ForwardAuthOrigins {
-		appOrigin, err := publicOrigin(raw)
+		pattern, err := parseAppOriginPattern(raw)
 		if err != nil {
 			return fmt.Errorf("forward auth app: %w", err)
 		}
-		if appOrigin == origin {
+		if !pattern.wildcard && pattern.origin == origin {
 			return errors.New("forward auth app origin must differ from the gateway origin")
 		}
 	}
@@ -60,9 +108,19 @@ func validateForwardAuthConfig(cfg Config) error {
 }
 
 func (s *Server) allowedAppOrigin(origin string) bool {
+	origin, err := publicOrigin(origin)
+	if err != nil {
+		return false
+	}
+	// A wildcard may cover the gateway's domain, but it must never turn the
+	// gateway itself into an app or permit app cookies on its origin.
+	gateway, err := publicOrigin(s.cfg.Origin)
+	if err != nil || origin == gateway {
+		return false
+	}
 	for _, raw := range s.cfg.ForwardAuthOrigins {
-		allowed, err := publicOrigin(raw)
-		if err == nil && origin == allowed {
+		pattern, err := parseAppOriginPattern(raw)
+		if err == nil && pattern.matches(origin) {
 			return true
 		}
 	}

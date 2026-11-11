@@ -69,7 +69,10 @@ sessions; REDIS_PASSWORD_FILE supports password-only and ACL URIs. `main.go`
 maps it into app.Config.RedisURL. Redis startup failures are fatal; no memory
 fallback exists. MemorySessions is a test double compiled only in tests.
 FORWARD_AUTH_ORIGINS (`--forward-auth-origins`) is a comma-separated allowlist of
-exact public app origins, default empty (forward authentication disabled).
+public app origins or leading `*.` subdomain patterns, default empty (forward
+authentication disabled). Wildcards match one or more DNS labels with exact
+scheme/port; the gateway origin is always excluded. Keep requests, callbacks,
+sessions and signed audiences bound to concrete origins.
 TRUSTED_PROXIES (`--trusted-proxies`) is a comma-separated list of proxy IPs or
 CIDRs, default empty. Only trusted socket peers can supply X-Forwarded-For;
 walk the chain right to left and stop at the first untrusted address. Keep

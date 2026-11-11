@@ -186,7 +186,8 @@ tests skip; ordinary unit tests still run.
 ## Protect apps with Caddy
 
 Set `ORIGIN` to the gateway's public URL and `FORWARD_AUTH_ORIGINS` (or
-`--forward-auth-origins`) to a comma-separated list of exact app origins:
+`--forward-auth-origins`) to a comma-separated list of app origins or subdomain
+wildcard patterns:
 
 ```sh
 ORIGIN=https://auth.example.com
@@ -194,12 +195,20 @@ RP_ID=auth.example.com
 FORWARD_AUTH_ORIGINS=https://app.example.com,https://other.example.net
 ```
 
-Origins include a scheme and optional port, without a path, query, or wildcard.
+Origins include a scheme and optional port, without a path or query.
+An optional leading `*.` matches one or more complete subdomain labels:
+`FORWARD_AUTH_ORIGINS=https://*.razzie.cloud` allows `https://files.razzie.cloud`
+and `https://nested.files.razzie.cloud`, but excludes `https://razzie.cloud`.
+Scheme and port must match exactly; `https://*.razzie.cloud:8443` only allows
+that explicit port. Other wildcard positions and wildcard IP addresses are
+rejected. Only include domains whose subdomains you trust to use gateway SSO.
 HTTPS is required, except for loopback HTTP origins used in local development
 (loopback IPs, `localhost`, and names ending in `.localhost`, such as
-`http://files.localhost:8082`). These names still require exact allowlist entries.
+`http://files.localhost:8082` or the pattern `http://*.localhost:8082`).
 An empty allowlist disables forward authentication (503). The gateway's own
-origin must not be in this list.
+origin must not be an exact entry; it is always excluded even when covered by a
+wildcard. Callbacks, app sessions and signed identity audiences remain bound to
+each concrete app origin; matching subdomains do not share sessions or cookies.
 
 Configure Caddy to expose the gateway and check requests before proxying each app:
 
