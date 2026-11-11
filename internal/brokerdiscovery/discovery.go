@@ -6,12 +6,14 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
 	"errors"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -57,6 +59,14 @@ func prepare(raw string, options Options) (string, *http.Client, error) {
 		// Allow one text-file line terminator, never embedded or surrounding whitespace.
 		token := strings.TrimSuffix(strings.TrimSuffix(string(b), "\n"), "\r")
 		if len(token) > 128 || !tokenValue.MatchString(token) {
+			return "", nil, errors.New("invalid broker token file")
+		}
+		parts := strings.Split(token, ".")
+		generation, e := strconv.ParseUint(parts[2], 10, 64)
+		if e != nil || generation > 9007199254740991 {
+			return "", nil, errors.New("invalid broker token file")
+		}
+		if mac, e := base64.RawURLEncoding.Strict().DecodeString(parts[3]); e != nil || len(mac) != 32 {
 			return "", nil, errors.New("invalid broker token file")
 		}
 		q.Set("token", token)

@@ -18,7 +18,7 @@ func prepareConfig(t *testing.T, args ...string) {
 	t.Cleanup(func() { os.Args = originalArgs })
 	os.Args = append([]string{"access-gateway"}, args...)
 	for _, key := range []string{
-		"SERVICE_PORT", "LANDING_ORIGIN", "ORIGIN", "RP_ID", "RP_NAME", "FORWARD_AUTH_ORIGINS", "TRUSTED_PROXIES",
+		"BROKER_TOKEN_FILE", "BROKER_CA_FILE", "SERVICE_PORT", "LANDING_ORIGIN", "ORIGIN", "RP_ID", "RP_NAME", "FORWARD_AUTH_ORIGINS", "TRUSTED_PROXIES",
 		"POSTGRES_URI", "POSTGRES_URI_FROM", "POSTGRES_PASSWORD_FILE",
 		"REDIS_URI", "REDIS_URI_FROM", "REDIS_PASSWORD_FILE",
 	} {
@@ -136,4 +136,12 @@ func TestRedisPasswordFileWithoutUsername(t *testing.T) {
 	cfg, err := Load()
 	require.NoError(t, err)
 	assert.Equal(t, "rediss://:p%40ss%3Aword@sessions:6379/2", cfg.RedisURI)
+}
+
+func TestLoadBrokerTokenAndTrustFlags(t *testing.T) {
+	prepareConfig(t, "--broker-token-file", "/missing-token", "--broker-ca-file", "/missing-ca")
+	t.Setenv("POSTGRES_URI", "postgres://u:p@db/gateway")
+	if _, err := Load(); err == nil {
+		t.Fatal("token option without discovery must fail")
+	}
 }

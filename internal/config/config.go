@@ -50,6 +50,12 @@ func Load() (*Config, error) {
 		cfg.PostgresURI = value
 	}
 
+	if cfg.PostgresURI != "" {
+		u, e := url.Parse(cfg.PostgresURI)
+		if e != nil || u.Host == "" || u.User == nil || u.Path == "" || u.Fragment != "" || (u.Scheme != "postgres" && u.Scheme != "postgresql") {
+			return nil, fmt.Errorf("invalid Postgres URI")
+		}
+	}
 	if cfg.PostgresURI == "" {
 		return nil, fmt.Errorf("Postgres URI is required: set POSTGRES_URI or POSTGRES_URI_FROM")
 	}
@@ -74,6 +80,12 @@ func Load() (*Config, error) {
 		cfg.RedisURI = value
 	}
 
+	if cfg.RedisURI != "" {
+		u, e := url.Parse(cfg.RedisURI)
+		if e != nil || u.Host == "" || u.Fragment != "" || (u.Scheme != "redis" && u.Scheme != "rediss") {
+			return nil, fmt.Errorf("invalid Redis URI")
+		}
+	}
 	if cfg.RedisURI != "" && cfg.RedisPasswordFile != "" {
 		pwd, err := os.ReadFile(cfg.RedisPasswordFile)
 		if err != nil {
