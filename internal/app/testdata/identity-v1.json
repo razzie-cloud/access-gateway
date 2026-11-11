@@ -1,0 +1,22 @@
+{
+  "now": "2026-11-11T12:00:00Z",
+  "key_set": {
+    "issuer": "https://auth.example",
+    "expires_at": "2026-11-11T12:05:00Z",
+    "keys": [
+      {
+        "kid": "56475aa75463474c0285df5dbf2bcab7",
+        "public_key": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+        "not_before": "2026-11-11T00:00:00Z",
+        "expires_at": "2026-11-12T00:02:00Z"
+      },
+      {
+        "kid": "24f6ed6acbfe1009c030d7ca567c33ca",
+        "public_key": "29acbae141bccaf0b22e1a94d34d0bc7361e526d0bfe12c89794bc9322966dd7",
+        "not_before": "2026-11-12T00:00:00Z",
+        "expires_at": "2026-11-13T00:02:00Z"
+      }
+    ]
+  },
+  "token": "v4.public.eyJhZG1pbiI6ZmFsc2UsImF1ZCI6Imh0dHBzOi8vYXBwLmV4YW1wbGUiLCJleHAiOiIyMDI2LTExLTExVDEyOjAxOjAwWiIsImlhdCI6IjIwMjYtMTEtMTFUMTI6MDA6MDBaIiwiaXNzIjoiaHR0cHM6Ly9hdXRoLmV4YW1wbGUiLCJtZXRob2QiOiJHRVQiLCJuYW1lIjoiYWxpY2UiLCJuYmYiOiIyMDI2LTExLTExVDEyOjAwOjAwWiIsInN1YiI6ImFhYWFhYWFhLWFhYWEtNGFhYS1hYWFhLWFhYWFhYWFhYWFhYSIsInVyaSI6Ii9zdGF0aWMvYXBwLmNzcz9jaGVjaz1oZWxsbyUyMHdvcmxkIn3umsLHUdaAzE1-uno_Dtu3C3jiVmcX-CdezuUvYBKttpd-qNvpNHbTdrKsD__NF40CWQX9o3SUAm1ddmkgXcgF.NTY0NzVhYTc1NDYzNDc0YzAyODVkZjVkYmYyYmNhYjc"
+}

@@ -50,7 +50,7 @@ For a public installation, use HTTPS and set:
 
 Configure Caddy to check every app path through `/forward_auth` (or
 `/forward_auth/admin`) and pass the verified `X-Auth-Request-User` UUID and
-`X-Auth-Request-Name` headers. Keep app backends private and strip incoming
+`X-Auth-Request-Name` headers, plus `X-Auth-Request-Token` (PASETO v4.public). Keep app backends private and strip incoming
 identity headers. See the [Caddy setup](docs/reference.md#protect-apps-with-caddy)
 for a complete example.
 
@@ -65,3 +65,6 @@ The header logo and Razzie Cloud name link to `LANDING_ORIGIN`
 HTTP(S) origin of your landing page, without a trailing slash. The adjacent
 service name opens this app. Compose and Swarm set the landing origin for their
 local/public domain.
+
+Public verification keys are available at `/.well-known/paseto-keys`. Signing
+keys rotate daily in shared Redis/Valkey. See the [signed identity contract](docs/reference.md#signed-proxy-identity).

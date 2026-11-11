@@ -211,9 +211,10 @@ auth.example.com {
 (access_gateway) {
     request_header -X-Auth-Request-User
     request_header -X-Auth-Request-Name
+    request_header -X-Auth-Request-Token
     forward_auth access-gateway:8080 {
         uri /forward_auth
-        copy_headers X-Auth-Request-User X-Auth-Request-Name
+        copy_headers X-Auth-Request-User X-Auth-Request-Name X-Auth-Request-Token
     }
 }
 
@@ -254,13 +255,13 @@ snippet includes the header copying; the stack still needs a gateway service
 with its public route and the configuration above before it can be deployed.
 
 `GET /forward_auth` and `GET /forward_auth/admin` read `X-Forwarded-Proto`,
-`X-Forwarded-Host`, `X-Forwarded-Uri`, and (on callbacks) `X-Forwarded-Method`.
+`X-Forwarded-Host`, `X-Forwarded-Uri`, and `X-Forwarded-Method`.
 Caddy sets these from the original request. Only trusted reverse proxies should
 reach these endpoints;
 other proxies must overwrite client-supplied forwarded headers. Protect app
 backends from direct access, and use `copy_headers` so Caddy replaces supplied
 identity headers with the gateway's response values. Strip incoming
-`X-Auth-Request-User` and `X-Auth-Request-Name` before forward auth, as the local
+`X-Auth-Request-User`, `X-Auth-Request-Name` and `X-Auth-Request-Token` before forward auth, as the local
 and production configurations do.
 
 The sign-in flow works across unrelated app domains:
@@ -378,3 +379,62 @@ not identify whether a rejected claimed account exists. The existing one-time
 bootstrap credential is retained in `bootstrap.token_created` at WARN even with
 `LOG_LEVEL=ERROR`, so first-user setup remains possible. Retain access controls
 on service logs.
+
+## Signed proxy identity
+
+Successful forward authentication also returns `X-Auth-Request-Token`, a PASETO
+`v4.public` assertion signed using go-paseto. Strip this header before forward
+auth and include it in Caddy's `copy_headers`. The assertion binds:
+
+| Claim | Meaning |
+| --- | --- |
+| `iss` | Gateway's configured public `ORIGIN` |
+| `aud` | Exact allowed public app origin |
+| `sub`, `name` | Canonical UUID and username; must match the two identity headers |
+| `method`, `uri` | Original HTTP method and request URI including query string |
+| `admin` | True only when `/forward_auth/admin` authorized this request |
+| `iat`, `nbf`, `exp` | Issue time, not-before time and expiration, at most one minute later |
+
+The authenticated footer is the lowercase hex encoding of the first 16 bytes of
+SHA-256 of the raw Ed25519 public key. It selects a key only; never trust claims
+or the footer before signature verification. Tokens use no implicit assertion.
+They authenticate headers and the request target, not the body, and are replayable
+for the same request target within their short lifetime. Keep clocks synchronized.
+They supplement the existing live session and current-role checks, which still
+run on every forward-auth request. Do not log or echo assertions to public clients.
+
+Unauthenticated `GET`/`HEAD /.well-known/paseto-keys` exposes only public material.
+GET returns JSON with `issuer`, `expires_at` (five-minute cache deadline), and
+`keys`: entries with `kid`, `public_key` (hex Ed25519 public key), `not_before`
+and `expires_at` (RFC3339 timestamps). HEAD has no body. Normal anonymous request
+limits apply. Errors return 503 rather than incomplete key sets.
+
+Keys live in the gateway's existing origin-scoped Redis/Valkey namespace under
+`paseto:<UTC-day-start-unix-seconds>`. Replicas atomically reserve one immutable
+secret per daily epoch. Startup and discovery provision the current and next
+keys; signing automatically selects the current UTC day's key. The next public
+key is published before activation. Each secret expires two minutes after its
+signing day ends; the preceding public key remains discoverable during that
+overlap. There is no process-local signing-key fallback. Redis failures prevent
+signed identity issuance. Preserve Redis AOF/backups as secret material.
+
+Files and Notes enable verification with `ACCESS_GATEWAY_URL` /
+`--access-gateway-url`, an exact operator-configured gateway origin. They fetch
+this endpoint at startup and refresh on use after the document expires, or for an
+unknown key, with serialized requests and a five-second retry cooldown. They
+never use expired cached keys after a discovery failure. Signature, issuer,
+audience, time, key lifetime, request binding and identity-header equality must
+all pass. Notes admin routes additionally require signed `admin=true` and their
+existing trusted proxy marker. Missing/malformed assertions return 401.
+
+The configured discovery URL is the trust anchor. Use HTTPS across untrusted
+networks; private container-network HTTP may use `http://access-gateway:8080`.
+Discovery's issuer is the public gateway origin and is pinned for the process
+lifetime after startup. Redirects are rejected, responses are bounded, and cache
+lifetimes are capped at five minutes. An empty URL retains the legacy trusted
+proxy mode; a configured but unavailable gateway fails startup. Public Files
+capabilities and private health probes do not require identity assertions.
+
+Upgrade the gateway before enabling verification in consuming apps. Publish all
+updated service images before selecting their tags for Compose/Swarm rollout;
+source commits and parent pins alone do not update running containers.

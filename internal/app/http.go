@@ -26,6 +26,7 @@ func (s *Server) routes() {
 	handle := func(pattern string, handler http.HandlerFunc) {
 		s.mux.Handle(pattern, logging.Route(pattern, handler))
 	}
+	handle("/.well-known/paseto-keys", s.handleAssertionKeys)
 	handle("/forward_auth", s.handleForwardAuth)
 	handle("/forward_auth/admin", s.handleAdminForwardAuth)
 	handle("/auth/authorize", s.handleAuthorize)

@@ -214,3 +214,14 @@ absolute registration URLs from untrusted Host or forwarded headers.
   single-use code. Check state, exact app origin, expiry, and live parent session
   before consuming atomically. Codes are stored hashed. HTTPS app cookies use
   the __Host- prefix; all app/state cookies have Path=/ and no Domain attribute.
+
+## Signed identity
+
+Both forward-auth policies append X-Auth-Request-Token (PASETO v4.public) after
+live session/user/role checks. Bind UUID/name, exact app origin, forwarded method
+and URI, admin-policy result and one-minute lifetime. Public discovery is
+GET/HEAD /.well-known/paseto-keys; expose public keys only. Daily UTC epoch secrets
+are atomically reserved in the existing origin-scoped Redis namespace, expire
+with a two-minute overlap, and never fall back to process memory. Prepublish the
+next key and retain the prior key during overlap. Preserve bounded public-key
+cache deadlines and the Files/Notes verifier contract in docs/reference.md.

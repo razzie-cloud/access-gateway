@@ -3,6 +3,7 @@ module github.com/razzie-cloud/access-gateway
 go 1.27
 
 require (
+	aidanwoods.dev/go-paseto v1.6.0
 	github.com/alexflint/go-arg v1.6.1
 	github.com/fxamacker/cbor/v2 v2.9.6
 	github.com/go-rel/postgres v0.12.0
@@ -17,6 +18,7 @@ require (
 )
 
 require (
+	aidanwoods.dev/go-result v0.3.1 // indirect
 	github.com/alexflint/go-scalar v1.2.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/go-rel/sql v0.17.0 // indirect

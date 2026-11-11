@@ -41,6 +41,7 @@ type Server struct {
 	wa          *webauthn.WebAuthn
 	loginSecret []byte
 
+	assertions     assertionKeyStore
 	sessions       sessionStore
 	limits         *requestLimits
 	trustedProxies []netip.Prefix
@@ -101,11 +102,15 @@ func NewServer(cfg Config) (*Server, error) {
 		repo:           repo,
 		wa:             wa,
 		sessions:       sessions,
+		assertions:     sessions,
 		trustedProxies: proxies,
 		mux:            http.NewServeMux(),
 	}
 	if err := s.ensureLoginSecret(ctx); err != nil {
 		return nil, logging.Wrap("login_secret", err)
+	}
+	if _, err := s.assertionKeys(ctx, time.Now().UTC()); err != nil {
+		return nil, logging.Wrap("signing_keys", err)
 	}
 	s.routes()
 

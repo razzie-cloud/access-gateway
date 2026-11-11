@@ -16,9 +16,10 @@ import (
 
 func unitServer() *Server {
 	s := &Server{
-		cfg:      Config{Origin: "https://auth.example"},
-		sessions: memorySessionStore{NewMemorySessions(time.Minute)},
-		mux:      http.NewServeMux(),
+		cfg:        Config{Origin: "https://auth.example"},
+		sessions:   memorySessionStore{NewMemorySessions(time.Minute)},
+		assertions: &memoryAssertionKeys{},
+		mux:        http.NewServeMux(),
 	}
 	s.routes()
 	return s

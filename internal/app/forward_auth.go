@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/razzie-cloud/access-gateway/internal/logging"
@@ -169,6 +170,18 @@ func (s *Server) forwardAuth(w http.ResponseWriter, r *http.Request, requireAdmi
 				http.Error(w, "Invalid user ID", http.StatusInternalServerError)
 				return
 			}
+			method := r.Header.Get("X-Forwarded-Method")
+			if len(r.Header.Values("X-Forwarded-Method")) != 1 || method == "" || strings.ContainsAny(method, " ,\t\r\n") {
+				http.Error(w, "Invalid forwarded method", http.StatusBadRequest)
+				return
+			}
+			signed, err := s.signIdentity(r.Context(), time.Now().UTC(), id.String(), user.Username, origin, method, target.RequestURI(), requireAdmin)
+			if err != nil {
+				logging.FailKind(r.Context(), slog.LevelError, "redis", "signing_keys")
+				http.Error(w, "Signing keys unavailable", http.StatusServiceUnavailable)
+				return
+			}
+			w.Header().Set(assertionHeader, signed)
 			w.Header().Set("X-Auth-Request-User", id.String())
 			w.Header().Set("X-Auth-Request-Name", user.Username)
 			w.WriteHeader(http.StatusNoContent)

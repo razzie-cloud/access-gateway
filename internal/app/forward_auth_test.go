@@ -297,10 +297,19 @@ func TestForwardAuthSSO(t *testing.T) {
 		require.Equal(t, http.StatusNoContent, w.Code)
 		assert.Equal(t, userID.String(), w.Header().Get("X-Auth-Request-User"))
 		assert.Equal(t, "alice", w.Header().Get("X-Auth-Request-Name"))
+		assert.True(t, strings.HasPrefix(w.Header().Get(assertionHeader), "v4.public."))
 		assert.Empty(t, w.Body.String())
 		assert.Empty(t, w.Header().Get("Set-Cookie"))
 		assert.Empty(t, w.Header().Get("Location"))
 		assert.Equal(t, "no-store", w.Header().Get("Cache-Control"))
+		keys := s.assertions
+		s.assertions = failedAssertionKeys{}
+		denied := forwardRequest(s, origin, "/private", appCookie)
+		require.Equal(t, http.StatusServiceUnavailable, denied.Code)
+		assert.Empty(t, denied.Header().Get(assertionHeader))
+		assert.Empty(t, denied.Header().Get("X-Auth-Request-User"))
+		s.assertions = keys
+
 		// App cookies cannot authorize access to the gateway account UI/API.
 		r := httptest.NewRequest("GET", "/api/me", nil)
 		r.AddCookie(appCookie)
@@ -442,6 +451,7 @@ func TestAdminForwardAuthSSO(t *testing.T) {
 					assert.Empty(t, w.Header().Get("X-Auth-Request-Name"))
 				}
 				assert.Equal(t, "no-store", w.Header().Get("Cache-Control"))
+
 				assert.Empty(t, w.Header().Get("Location"))
 				assert.Empty(t, w.Header().Get("Set-Cookie"))
 				assert.Equal(t, http.StatusNoContent, forwardRequest(s, testAppOrigin, "/", app).Code)

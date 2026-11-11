@@ -118,6 +118,7 @@ func postgresServer(t *testing.T) *Server {
 	s.stopHealth = nil
 	require.NoError(t, s.sessions.Close())
 	s.sessions = redisStore
+	s.assertions = redisStore
 	t.Cleanup(func() { _ = s.db.Close() })
 	return s
 }
