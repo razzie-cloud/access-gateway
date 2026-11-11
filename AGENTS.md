@@ -225,3 +225,8 @@ are atomically reserved in the existing origin-scoped Redis namespace, expire
 with a two-minute overlap, and never fall back to process memory. Prepublish the
 next key and retain the prior key during overlap. Preserve bounded public-key
 cache deadlines and the Files/Notes verifier contract in docs/reference.md.
+
+Broker discovery uses BROKER_TOKEN_FILE / --broker-token-file and optional
+BROKER_CA_FILE / --broker-ca-file. Discovery URLs carry only public client IDs.
+Keep internal/brokerdiscovery and its tests synchronized across first-party apps.
+Never log discovery URLs or raw HTTP errors; no authentication fallback is allowed.

@@ -1,9 +1,9 @@
 package config
 
 import (
+	"context"
 	"fmt"
-	"io"
-	"net/http"
+	"github.com/razzie-cloud/access-gateway/internal/brokerdiscovery"
 	"net/url"
 	"os"
 	"strings"
@@ -12,6 +12,8 @@ import (
 )
 
 type Config struct {
+	BrokerTokenFile      string `arg:"--broker-token-file,env:BROKER_TOKEN_FILE"`
+	BrokerCAFile         string `arg:"--broker-ca-file,env:BROKER_CA_FILE"`
 	LandingOrigin        string `arg:"--landing-origin,env:LANDING_ORIGIN" default:"https://razzie.cloud"`
 	ServicePort          int    `arg:"--port,env:SERVICE_PORT" default:"8080"`
 	Origin               string `arg:"--origin,env:ORIGIN" default:"http://localhost:8080"`
@@ -30,61 +32,56 @@ type Config struct {
 func Load() (*Config, error) {
 	var cfg Config
 	if err := arg.Parse(&cfg); err != nil {
-		return nil, fmt.Errorf("failed to load config: %w", err)
+		return nil, fmt.Errorf("invalid command-line configuration")
 	}
 
 	landing, landingErr := url.Parse(cfg.LandingOrigin)
 	if landingErr != nil || landing.Hostname() == "" || (landing.Scheme != "http" && landing.Scheme != "https") || landing.User != nil || landing.Path != "" || landing.RawQuery != "" || landing.ForceQuery || landing.Fragment != "" {
 		return nil, fmt.Errorf("LANDING_ORIGIN must be an exact http(s) origin")
 	}
-	if cfg.PostgresURIFrom != "" {
-		uri, err := http.Get(cfg.PostgresURIFrom)
-		if err != nil {
-			return nil, fmt.Errorf("failed to fetch Postgres URI from %s: %w", cfg.PostgresURIFrom, err)
-		}
-		defer uri.Body.Close()
-		body, err := io.ReadAll(uri.Body)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read Postgres URI response body: %w", err)
-		}
-		cfg.PostgresURI = string(body)
+	if cfg.BrokerTokenFile != "" && cfg.PostgresURIFrom == "" && cfg.RedisURIFrom == "" {
+		return nil, fmt.Errorf("BROKER_TOKEN_FILE requires discovery")
 	}
+	if cfg.PostgresURIFrom != "" {
+		value, err := brokerdiscovery.Fetch(context.Background(), cfg.PostgresURIFrom, brokerdiscovery.Options{TokenFile: cfg.BrokerTokenFile, CAFile: cfg.BrokerCAFile})
+		if err != nil {
+			return nil, err
+		}
+		cfg.PostgresURI = value
+	}
+
 	if cfg.PostgresURI == "" {
 		return nil, fmt.Errorf("Postgres URI is required: set POSTGRES_URI or POSTGRES_URI_FROM")
 	}
 	if cfg.PostgresURI != "" && cfg.PostgresPasswordFile != "" {
 		pwd, err := os.ReadFile(cfg.PostgresPasswordFile)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read Postgres password file: %w", err)
+			return nil, fmt.Errorf("cannot read Postgres password file")
 		}
 		uri, err := url.Parse(cfg.PostgresURI)
-		if err != nil {
-			return nil, fmt.Errorf("invalid Postgres URI: %w", err)
+		if err != nil || uri.Host == "" || uri.User == nil || (uri.Scheme != "postgres" && uri.Scheme != "postgresql") {
+			return nil, fmt.Errorf("invalid Postgres URI")
 		}
 		uri.User = url.UserPassword(uri.User.Username(), string(pwd))
 		cfg.PostgresURI = uri.String()
 	}
 
 	if cfg.RedisURIFrom != "" {
-		uri, err := http.Get(cfg.RedisURIFrom)
+		value, err := brokerdiscovery.Fetch(context.Background(), cfg.RedisURIFrom, brokerdiscovery.Options{TokenFile: cfg.BrokerTokenFile, CAFile: cfg.BrokerCAFile})
 		if err != nil {
-			return nil, fmt.Errorf("failed to fetch Redis URI from %s: %w", cfg.RedisURIFrom, err)
+			return nil, err
 		}
-		defer uri.Body.Close()
-		body, err := io.ReadAll(uri.Body)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read Redis URI response body: %w", err)
-		}
-		cfg.RedisURI = string(body)
+		cfg.RedisURI = value
 	}
+
 	if cfg.RedisURI != "" && cfg.RedisPasswordFile != "" {
 		pwd, err := os.ReadFile(cfg.RedisPasswordFile)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read Redis password file: %w", err)
+			return nil, fmt.Errorf("cannot read Redis password file")
 		}
 		uri, err := url.Parse(cfg.RedisURI)
 		if err != nil {
-			return nil, fmt.Errorf("invalid Redis URI: %w", err)
+			return nil, fmt.Errorf("invalid Redis URI")
 		}
 		username := ""
 		if uri.User != nil {
