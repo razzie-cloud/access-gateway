@@ -59,3 +59,9 @@ For a working multi-app demo, use the
 Configuration, enrollment details, operations, and image publishing are in the
 [reference guide](docs/reference.md); development guidance is in
 [AGENTS.md](AGENTS.md).
+
+The header logo and Razzie Cloud name link to `LANDING_ORIGIN`
+(`--landing-origin`, default `https://razzie.cloud`). Set this to the exact
+HTTP(S) origin of your landing page, without a trailing slash. The adjacent
+service name opens this app. Compose and Swarm set the landing origin for their
+local/public domain.

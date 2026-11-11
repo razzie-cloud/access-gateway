@@ -12,6 +12,7 @@ import (
 )
 
 type Config struct {
+	LandingOrigin        string `arg:"--landing-origin,env:LANDING_ORIGIN" default:"https://razzie.cloud"`
 	ServicePort          int    `arg:"--port,env:SERVICE_PORT" default:"8080"`
 	Origin               string `arg:"--origin,env:ORIGIN" default:"http://localhost:8080"`
 	RPID                 string `arg:"--rp-id,env:RP_ID" default:"localhost"`
@@ -32,6 +33,10 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
+	landing, landingErr := url.Parse(cfg.LandingOrigin)
+	if landingErr != nil || landing.Hostname() == "" || (landing.Scheme != "http" && landing.Scheme != "https") || landing.User != nil || landing.Path != "" || landing.RawQuery != "" || landing.ForceQuery || landing.Fragment != "" {
+		return nil, fmt.Errorf("LANDING_ORIGIN must be an exact http(s) origin")
+	}
 	if cfg.PostgresURIFrom != "" {
 		uri, err := http.Get(cfg.PostgresURIFrom)
 		if err != nil {

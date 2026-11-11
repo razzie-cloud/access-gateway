@@ -31,6 +31,7 @@ func run() error {
 	addr := fmt.Sprintf(":%d", cfg.ServicePort)
 	s, err := app.NewServer(app.Config{
 		ListenAddr:         addr,
+		LandingOrigin:      cfg.LandingOrigin,
 		DatabaseURL:        cfg.PostgresURI,
 		RedisURL:           cfg.RedisURI,
 		Origin:             cfg.Origin,

@@ -21,6 +21,7 @@ import (
 var templates = template.Must(template.ParseFS(web.Assets, "templates.html"))
 
 type viewData struct {
+	LandingOrigin     string
 	NeedsRegistration bool
 	Invite            bool
 	User              *User
@@ -41,6 +42,9 @@ type adminUser struct {
 }
 
 func render(w http.ResponseWriter, r *http.Request, status int, name string, data viewData) {
+	if data.LandingOrigin == "" {
+		data.LandingOrigin = "https://razzie.cloud"
+	}
 	var buf bytes.Buffer
 	if err := templates.ExecuteTemplate(&buf, name, data); err != nil {
 		logging.Fields(r.Context(), "template", name)
@@ -117,6 +121,7 @@ func (s *Server) handlePage(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	data.LandingOrigin = s.cfg.LandingOrigin
 	render(w, r, 200, "page", data)
 }
 

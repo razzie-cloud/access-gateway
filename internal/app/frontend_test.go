@@ -25,9 +25,12 @@ func TestFrontendStateTransitions(t *testing.T) {
 		{name: "admin", data: viewData{User: &User{Username: "<admin>", IsAdmin: true}}, account: true, admin: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			tc.data.LandingOrigin = "http://localhost:9191"
 			var page bytes.Buffer
 			require.NoError(t, templates.ExecuteTemplate(&page, "page", tc.data))
 			html := page.String()
+			assert.Contains(t, html, `class="brand" href="http://localhost:9191/"`)
+			assert.Contains(t, html, `class="service-name" href="/">Access Gateway</a>`)
 			assert.Equal(t, tc.login, strings.Contains(html, `data-webauthn="login"`))
 			assert.Equal(t, tc.bootstrap, strings.Contains(html, `name="token"`))
 			assert.Equal(t, tc.invite, strings.Contains(html, `id="link-token"`))

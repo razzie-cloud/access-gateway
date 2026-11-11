@@ -19,9 +19,10 @@ import (
 )
 
 type Config struct {
-	ListenAddr  string
-	DatabaseURL string
-	RedisURL    string
+	LandingOrigin string
+	ListenAddr    string
+	DatabaseURL   string
+	RedisURL      string
 
 	Origin string
 	RPID   string

@@ -18,7 +18,7 @@ func prepareConfig(t *testing.T, args ...string) {
 	t.Cleanup(func() { os.Args = originalArgs })
 	os.Args = append([]string{"access-gateway"}, args...)
 	for _, key := range []string{
-		"SERVICE_PORT", "ORIGIN", "RP_ID", "RP_NAME", "FORWARD_AUTH_ORIGINS", "TRUSTED_PROXIES",
+		"SERVICE_PORT", "LANDING_ORIGIN", "ORIGIN", "RP_ID", "RP_NAME", "FORWARD_AUTH_ORIGINS", "TRUSTED_PROXIES",
 		"POSTGRES_URI", "POSTGRES_URI_FROM", "POSTGRES_PASSWORD_FILE",
 		"REDIS_URI", "REDIS_URI_FROM", "REDIS_PASSWORD_FILE",
 	} {
@@ -55,6 +55,7 @@ func TestLoadGatewaySettings(t *testing.T) {
 				{"FORWARD_AUTH_ORIGINS", "--forward-auth-origins", "https://app.example.com,https://other.example.net"},
 				{"REDIS_URI", "--redis-uri", "redis://sessions:6379/0"},
 				{"TRUSTED_PROXIES", "--trusted-proxies", "10.0.0.0/24,127.0.0.1"},
+				{"LANDING_ORIGIN", "--landing-origin", "http://localhost:9191"},
 			}
 			for _, v := range values {
 				if fromArgs {
@@ -76,6 +77,7 @@ func TestLoadGatewaySettings(t *testing.T) {
 			assert.Equal(t, values[5].value, cfg.ForwardAuthOrigins)
 			assert.Equal(t, values[6].value, cfg.RedisURI)
 			assert.Equal(t, values[7].value, cfg.TrustedProxies)
+			assert.Equal(t, values[8].value, cfg.LandingOrigin)
 		})
 	}
 }

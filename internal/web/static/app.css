@@ -359,3 +359,7 @@ nav[aria-label="breadcrumb"] li:last-child a { color: var(--pico-color); }
   100% { outline-color: transparent; }
 }
 @media(prefers-reduced-motion:reduce) { .navigation-highlight { animation: none; } }
+
+/* Shared cloud home and app home are separate navigation targets. */
+.brand-group { display: flex; align-items: center; flex-wrap: wrap; gap: .7rem; }
+.brand-group .service-name { text-decoration: none; white-space: nowrap; }

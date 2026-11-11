@@ -223,6 +223,7 @@ func (s *Server) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Unable to load sign-in", http.StatusServiceUnavailable)
 		return
 	}
+	data.LandingOrigin = s.cfg.LandingOrigin
 	render(w, r, http.StatusOK, "page", data)
 }
 
