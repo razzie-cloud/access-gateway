@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"aidanwoods.dev/go-paseto"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -579,7 +580,29 @@ func TestAdminForwardAuthChecksLiveRoleAndSession(t *testing.T) {
 			want = http.StatusNoContent
 		}
 		assert.Equal(t, want, forwardRequestTo(s, "/forward_auth/admin", testAppOrigin, "/admin", app).Code)
-		assert.Equal(t, http.StatusNoContent, forwardRequest(s, testAppOrigin, "/", app).Code)
+		ordinary := forwardRequest(s, testAppOrigin, "/", app)
+		require.Equal(t, http.StatusNoContent, ordinary.Code)
+		// Ordinary app routes must learn the live role too, including after a
+		// promotion/demotion with warm session caches and the same app cookie.
+		set, err := s.assertionKeys(t.Context(), time.Now().UTC())
+		require.NoError(t, err)
+		parser := paseto.NewParser()
+		parser.AddRule(paseto.IssuedBy(s.cfg.Origin), paseto.ForAudience(testAppOrigin))
+		signed := ordinary.Header().Get(assertionHeader)
+		footer, err := parser.UnsafeParseFooter(paseto.V4Public, signed)
+		require.NoError(t, err)
+		var public paseto.V4AsymmetricPublicKey
+		for _, key := range set.Keys {
+			if key.ID == string(footer) {
+				public, err = paseto.NewV4AsymmetricPublicKeyFromHex(key.PublicKey)
+				require.NoError(t, err)
+			}
+		}
+		assertion, err := parser.ParseV4Public(public, signed, nil)
+		require.NoError(t, err)
+		var claimedAdmin bool
+		require.NoError(t, assertion.Get("admin", &claimedAdmin))
+		assert.Equal(t, admin, claimedAdmin, "ordinary forward auth must carry the user's current role")
 	}
 	// Warm session caches must not bypass parent revocation or expiry.
 	for _, expired := range []bool{false, true} {

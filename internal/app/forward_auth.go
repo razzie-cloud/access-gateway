@@ -233,7 +233,7 @@ func (s *Server) forwardAuth(w http.ResponseWriter, r *http.Request, requireAdmi
 				s.writeError(w, r, http.StatusBadRequest, "Invalid forwarded method")
 				return
 			}
-			signed, err := s.signIdentity(r.Context(), time.Now().UTC(), id.String(), user.Username, origin, method, target.RequestURI(), requireAdmin)
+			signed, err := s.signIdentity(r.Context(), time.Now().UTC(), id.String(), user.Username, origin, method, target.RequestURI(), user.IsAdmin)
 			if err != nil {
 				logging.FailKind(r.Context(), slog.LevelError, "redis", "signing_keys")
 				s.writeError(w, r, http.StatusServiceUnavailable, "Signing keys unavailable")

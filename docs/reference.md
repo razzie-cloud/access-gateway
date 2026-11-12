@@ -435,7 +435,7 @@ auth and include it in Caddy's `copy_headers`. The assertion binds:
 | `aud` | Exact allowed public app origin |
 | `sub`, `name` | Canonical UUID and username; must match the two identity headers |
 | `method`, `uri` | Original HTTP method and request URI including query string |
-| `admin` | True only when `/forward_auth/admin` authorized this request |
+| `admin` | The user's current PostgreSQL admin role, on both forward-auth policies |
 | `iat`, `nbf`, `exp` | Issue time, not-before time and expiration, at most one minute later |
 
 The authenticated footer is the lowercase hex encoding of the first 16 bytes of
@@ -444,7 +444,11 @@ or the footer before signature verification. Tokens use no implicit assertion.
 They authenticate headers and the request target, not the body, and are replayable
 for the same request target within their short lifetime. Keep clocks synchronized.
 They supplement the existing live session and current-role checks, which still
-run on every forward-auth request. Do not log or echo assertions to public clients.
+run on every forward-auth request. `/forward_auth/admin` additionally denies
+non-admin users before issuing an assertion. Ordinary `/forward_auth` includes
+the live role so apps can show and enforce administrator-only controls without
+requiring an admin policy for the entire app. Do not log or echo assertions to
+public clients.
 
 Unauthenticated `GET`/`HEAD /.well-known/paseto-keys` exposes only public material.
 GET returns JSON with `issuer`, `expires_at` (five-minute cache deadline), and

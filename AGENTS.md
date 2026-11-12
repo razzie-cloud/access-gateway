@@ -233,7 +233,8 @@ absolute registration URLs from untrusted Host or forwarded headers.
 
 Both forward-auth policies append X-Auth-Request-Token (PASETO v4.public) after
 live session/user/role checks. Bind UUID/name, exact app origin, forwarded method
-and URI, admin-policy result and one-minute lifetime. Public discovery is
+and URI, the user's live PostgreSQL admin role and one-minute lifetime. Both
+policies carry the live role; never substitute whether the route requires admin. Public discovery is
 GET/HEAD /.well-known/paseto-keys; expose public keys only. Daily UTC epoch secrets
 are atomically reserved in the existing origin-scoped Redis namespace, expire
 with a two-minute overlap, and never fall back to process memory. Prepublish the
