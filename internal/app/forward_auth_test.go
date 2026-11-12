@@ -536,9 +536,14 @@ func TestAdminForwardAuthSSO(t *testing.T) {
 					assert.Equal(t, tc.username, w.Header().Get("X-Auth-Request-Name"))
 				} else {
 					assert.Equal(t, http.StatusForbidden, w.Code)
+					assert.Equal(t, "text/html; charset=utf-8", w.Header().Get("Content-Type"))
+					assert.Contains(t, w.Body.String(), "<!doctype html>")
 					assert.Contains(t, w.Body.String(), "Administrator access required")
+					assert.Contains(t, w.Body.String(), `href="`+s.cfg.Origin+`/static/app.css"`)
+					assert.Contains(t, w.Header().Get("Content-Security-Policy"), "style-src "+s.cfg.Origin+";")
 					assert.Empty(t, w.Header().Get("X-Auth-Request-User"))
 					assert.Empty(t, w.Header().Get("X-Auth-Request-Name"))
+					assert.Empty(t, w.Header().Get("X-Auth-Request-Token"))
 				}
 				assert.Equal(t, "no-store", w.Header().Get("Cache-Control"))
 

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="htmx-config" content='{"allowEval":false,"includeIndicatorStyles":false,"selfRequestsOnly":true,"historyCacheSize":0}'>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src http://127.0.0.1:8765; style-src http://127.0.0.1:8765; img-src http://127.0.0.1:8765; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <title>Administrator access required · Razzie Cloud</title>
+  <link rel="icon" href="http://127.0.0.1:8765/access-gateway/internal/web/static/razzie-cloud-logo.png">
+  <link rel="stylesheet" href="http://127.0.0.1:8765/access-gateway/internal/web/static/pico.min.css">
+  <link rel="stylesheet" href="http://127.0.0.1:8765/access-gateway/docs/mockups/mockup.css">
+  <link rel="stylesheet" href="http://127.0.0.1:8765/access-gateway/docs/mockups/dark.css">
+  <link rel="stylesheet" href="http://127.0.0.1:8765/access-gateway/docs/mockups/admin-denied.css">
+  <script defer src="http://127.0.0.1:8765/access-gateway/internal/web/static/htmx.min.js"></script>
+</head>
+<body class="denied-preview">
+  <div class="preview-bar">
+    <strong>DESIGN PREVIEW</strong>
+    <span>Admin access denied</span>
+    <a href="http://127.0.0.1:8765/access-gateway/docs/mockups/admin-denied.html">Light mode</a>
+  </div>
+  <main class="denied-main">
+    <div class="denied-content">
+      <article class="denied-card" aria-labelledby="denied-heading">
+        <a class="denied-brand" href="https://razzie.cloud/" aria-label="Razzie Cloud home">
+          <img src="http://127.0.0.1:8765/access-gateway/internal/web/static/razzie-cloud-logo.png" width="104" height="104" alt="">
+          <span>Razzie Cloud</span>
+        </a>
+        <p class="denied-status">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V6a4 4 0 0 1 8 0v4m-4 5v2"/></svg>
+          403 · Access denied
+        </p>
+        <h1 id="denied-heading">Administrator access required</h1>
+        <p class="denied-explanation">You’re signed in, but your account doesn’t have permission to open this page.</p>
+        <div class="denied-actions">
+          <a href="https://razzie.cloud/" role="button">Go to cloud home <span aria-hidden="true">→</span></a>
+          <a href="https://auth.razzie.cloud/">Manage your account</a>
+        </div>
+        <p class="denied-help">Need access? Contact your Razzie Cloud administrator.</p>
+      </article>
+      <p class="denied-footer">Razzie Cloud Access Gateway</p>
+    </div>
+  </main>
+</body>
+</html>

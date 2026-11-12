@@ -214,7 +214,7 @@ func (s *Server) forwardAuth(w http.ResponseWriter, r *http.Request, requireAdmi
 				return
 			}
 			if requireAdmin && !user.IsAdmin {
-				http.Error(w, "Administrator access required", http.StatusForbidden)
+				s.renderAdminDenied(w, r)
 				return
 			}
 			if strings.ContainsFunc(user.Username, func(r rune) bool { return r < 32 || r == 127 }) {

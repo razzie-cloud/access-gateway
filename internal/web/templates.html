@@ -26,6 +26,40 @@
 </body>
 </html>{{end}}
 
+{{define "admin-denied"}}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Administrator access required · Razzie Cloud</title>
+  <link rel="icon" href="{{.GatewayOrigin}}/static/razzie-cloud-logo.png">
+  <link rel="stylesheet" href="{{.GatewayOrigin}}/static/pico.min.css">
+  <link rel="stylesheet" href="{{.GatewayOrigin}}/static/app.css">
+</head>
+<body class="denied-page">
+  <main class="denied-main">
+    <div class="denied-content">
+      <article class="denied-card" aria-labelledby="denied-heading">
+        <a class="denied-brand" href="{{.LandingOrigin}}/" aria-label="Razzie Cloud home">
+          <img src="{{.GatewayOrigin}}/static/razzie-cloud-logo.png" width="104" height="104" alt="">
+          <span>Razzie Cloud</span>
+        </a>
+        <p class="denied-status">{{template "icon-lock"}}403 · Access denied</p>
+        <h1 id="denied-heading">Administrator access required</h1>
+        <p class="denied-explanation">You’re signed in, but your account doesn’t have permission to open this page.</p>
+        <div class="denied-actions">
+          <a href="{{.LandingOrigin}}/" role="button">Go to cloud home <span aria-hidden="true">→</span></a>
+          <a href="{{.GatewayOrigin}}/">Manage your account</a>
+        </div>
+        <p class="denied-help">Need access? Contact your Razzie Cloud administrator.</p>
+      </article>
+      <p class="denied-footer">Razzie Cloud Access Gateway</p>
+    </div>
+  </main>
+</body>
+</html>{{end}}
+
 {{define "state"}}
 {{if .User}}
 <div class="app-layout">

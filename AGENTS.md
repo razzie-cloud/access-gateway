@@ -202,8 +202,11 @@ absolute registration URLs from untrusted Host or forwarded headers.
   malformed/unlisted forwarded origins return 400. Unknown paths return 404.
 - GET /forward_auth/admin shares the same SSO flow and app sessions, but requires
   the user's current PostgreSQL is_admin value before returning 204/identity
-  headers. Regular users receive 403 without a login redirect. Both endpoints
-  complete /_auth/callback with a 303; the redirected app request enforces the
+  headers. Regular users receive a branded HTML 403 without a login redirect.
+  Its assets/account link use absolute configured ORIGIN URLs and cloud-home
+  links use LANDING_ORIGIN. The denial-only CSP permits gateway styles/images
+  and disables scripts; the page must work when displayed on an app hostname.
+  Both endpoints complete /_auth/callback with a 303; the redirected app request enforces the
   selected policy. Never cache roles or exempt callbacks from forward auth.
 - The gateway session must never be accepted as an app session or copied to an
   app. App sessions bind to exact allowed origins and live gateway sessions.

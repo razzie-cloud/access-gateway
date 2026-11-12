@@ -1,0 +1,24 @@
+/* The error can be displayed on any protected app's origin.
+   All HTML asset and navigation references are absolute URLs. */
+.denied-preview { min-height: 100vh; min-height: 100svh; display: flex; flex-direction: column; }
+.denied-main { flex: 1; display: grid; place-items: center; padding: 3rem 1.25rem; }
+.denied-content { width: 100%; max-width: 560px; }
+.denied-card { text-align: center; padding: 2.5rem 3rem 2rem; border-radius: 1rem; box-shadow: 0 12px 45px #1d3a3810; }
+.denied-brand { display: inline-flex; flex-direction: column; align-items: center; gap: .3rem; margin-bottom: 1.75rem; color: var(--pico-h1-color); text-decoration: none; font-size: 1.25rem; font-weight: 700; letter-spacing: -.04em; border-radius: .4rem; }
+.denied-brand img { width: 104px; height: 104px; object-fit: contain; }
+.denied-status { display: flex; align-items: center; justify-content: center; gap: .4rem; width: fit-content; margin: 0 auto 1rem; padding: .3rem .75rem; border-radius: 2rem; background: #fbf2e2; color: #886229; font-size: .75rem; font-weight: 600; }
+.denied-card h1 { font-size: 2.05rem; max-width: 390px; margin: 0 auto 1rem; text-wrap: balance; }
+.denied-explanation { max-width: 360px; margin: 0 auto; color: var(--pico-muted-color); font-size: .95rem; }
+.denied-actions { display: flex; flex-direction: column; align-items: center; gap: 1rem; margin: 1.75rem 0; }
+.denied-actions [role="button"] { padding: .75rem 1.3rem; gap: .8rem; }
+.denied-actions > a:not([role="button"]) { font-size: .85rem; }
+.denied-help { margin: 0; padding-top: 1.5rem; border-top: 1px solid var(--pico-muted-border-color); color: var(--pico-muted-color); font-size: .8rem; }
+.denied-footer { margin: 1.25rem 0 0; text-align: center; color: var(--pico-muted-color); font-size: .73rem; }
+[data-theme="dark"] .denied-card { box-shadow: 0 16px 45px #00000030; }
+[data-theme="dark"] .denied-status { background: #3b3224; color: #e9c57e; }
+@media (max-width: 480px) {
+  .denied-main { padding: 1.5rem 1rem; }
+  .denied-card { padding: 2rem 1.25rem 1.5rem; }
+  .denied-card h1 { font-size: 1.8rem; }
+  .denied-brand { margin-bottom: 1.5rem; }
+}

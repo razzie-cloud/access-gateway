@@ -22,6 +22,7 @@ var templates = template.Must(template.ParseFS(web.Assets, "templates.html"))
 
 type viewData struct {
 	LandingOrigin     string
+	GatewayOrigin     string
 	NeedsRegistration bool
 	Invite            bool
 	User              *User
@@ -55,6 +56,18 @@ func render(w http.ResponseWriter, r *http.Request, status int, name string, dat
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
 	_, _ = w.Write(buf.Bytes())
+}
+
+// The proxy displays this response on the protected app's origin. Both asset
+// URLs and their CSP sources must therefore refer to the configured gateway,
+// never to the request's Host or forwarded headers. This page needs no scripts.
+func (s *Server) renderAdminDenied(w http.ResponseWriter, r *http.Request) {
+	origin := strings.TrimRight(s.cfg.Origin, "/")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src "+origin+"; img-src "+origin+"; base-uri 'none'; frame-ancestors 'none'; form-action 'none'")
+	render(w, r, http.StatusForbidden, "admin-denied", viewData{
+		GatewayOrigin: origin,
+		LandingOrigin: strings.TrimRight(s.cfg.LandingOrigin, "/"),
+	})
 }
 
 func (s *Server) state(r *http.Request) (viewData, error) {

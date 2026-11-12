@@ -250,6 +250,13 @@ identity headers; regular users receive **403 Administrator access required**
 without identity headers or a sign-in redirect. Role changes apply on the next
 request, including for existing app sessions. Missing or expired sessions follow
 the normal sign-in flow; deleted users receive 401 and dependency failures 503.
+The role-denial response is a branded HTML page with automatic light/dark styling,
+a cloud-home button and an account-management link. Its asset/account URLs use
+configured `ORIGIN`, and home links use `LANDING_ORIGIN` (default
+`https://razzie.cloud`). All are absolute because the proxy displays the response
+on the app's hostname. A response-specific CSP permits styles/images from the
+gateway origin and disables scripts, connections, forms and framing. The normal
+gateway CSP is unchanged.
 
 Keep `/_auth/callback` behind forward auth. For a whole admin-only app it can use
 `/forward_auth/admin`; for mixed regular/admin paths on one hostname, route the
