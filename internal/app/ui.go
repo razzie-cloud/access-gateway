@@ -23,6 +23,7 @@ var templates = template.Must(template.ParseFS(web.Assets, "templates.html"))
 type viewData struct {
 	LandingOrigin     string
 	GatewayOrigin     string
+	Failure           *errorPage
 	NeedsRegistration bool
 	Invite            bool
 	User              *User
@@ -42,7 +43,7 @@ type adminUser struct {
 	UUID string
 }
 
-func render(w http.ResponseWriter, r *http.Request, status int, name string, data viewData) {
+func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name string, data viewData) {
 	if data.LandingOrigin == "" {
 		data.LandingOrigin = "https://razzie.cloud"
 	}
@@ -50,24 +51,12 @@ func render(w http.ResponseWriter, r *http.Request, status int, name string, dat
 	if err := templates.ExecuteTemplate(&buf, name, data); err != nil {
 		logging.Fields(r.Context(), "template", name)
 		logging.Fail(r.Context(), slog.LevelError, "render_template", err)
-		http.Error(w, "Unable to render page", 500)
+		s.writeError(w, r, 500, "Unable to render page")
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
 	_, _ = w.Write(buf.Bytes())
-}
-
-// The proxy displays this response on the protected app's origin. Both asset
-// URLs and their CSP sources must therefore refer to the configured gateway,
-// never to the request's Host or forwarded headers. This page needs no scripts.
-func (s *Server) renderAdminDenied(w http.ResponseWriter, r *http.Request) {
-	origin := strings.TrimRight(s.cfg.Origin, "/")
-	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src "+origin+"; img-src "+origin+"; base-uri 'none'; frame-ancestors 'none'; form-action 'none'")
-	render(w, r, http.StatusForbidden, "admin-denied", viewData{
-		GatewayOrigin: origin,
-		LandingOrigin: strings.TrimRight(s.cfg.LandingOrigin, "/"),
-	})
 }
 
 func (s *Server) state(r *http.Request) (viewData, error) {
@@ -96,21 +85,21 @@ func (s *Server) state(r *http.Request) (viewData, error) {
 
 func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		w.WriteHeader(http.StatusMethodNotAllowed)
+		s.methodNotAllowed(w, r, http.MethodGet)
 		return
 	}
 	user, err := s.currentUser(r)
 	if err != nil {
 		if errors.Is(err, errSessionStore) {
 			logging.Fail(r.Context(), slog.LevelError, "redis", err)
-			render(w, r, 503, "message", viewData{Error: "Session storage unavailable"})
+			s.writeError(w, r, 503, "Session storage unavailable")
 			return
 		}
-		render(w, r, 401, "message", viewData{Error: "Sign in first"})
+		s.writeError(w, r, 401, "Sign in first")
 		return
 	}
 	if !user.IsAdmin {
-		render(w, r, 403, "message", viewData{Error: "Administrator access required"})
+		s.writeError(w, r, 403, "Administrator access required")
 		return
 	}
 	s.renderActivity(w, r, user, "")
@@ -118,11 +107,11 @@ func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handlePage(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" && r.URL.Path != "/register" {
-		http.NotFound(w, r)
+		s.writeError(w, r, http.StatusNotFound, "Page not found")
 		return
 	}
 	if r.Method != http.MethodGet {
-		w.WriteHeader(405)
+		s.methodNotAllowed(w, r, http.MethodGet)
 		return
 	}
 	data := viewData{Invite: r.URL.Path == "/register"}
@@ -130,54 +119,54 @@ func (s *Server) handlePage(w http.ResponseWriter, r *http.Request) {
 		var err error
 		data, err = s.state(r)
 		if err != nil {
-			http.Error(w, "Unable to load account", 500)
+			s.writeError(w, r, 500, "Unable to load account")
 			return
 		}
 	}
 	data.LandingOrigin = s.cfg.LandingOrigin
-	render(w, r, 200, "page", data)
+	s.render(w, r, 200, "page", data)
 }
 
 func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		w.WriteHeader(405)
+		s.methodNotAllowed(w, r, http.MethodGet)
 		return
 	}
 	data, err := s.state(r)
 	if err != nil {
 		logging.Fail(r.Context(), slog.LevelError, "application", err)
-		render(w, r, 500, "message", viewData{Error: "Unable to load account"})
+		s.writeError(w, r, 500, "Unable to load account")
 		return
 	}
-	render(w, r, 200, "state", data)
+	s.render(w, r, 200, "state", data)
 }
 
 func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		w.WriteHeader(405)
+		s.methodNotAllowed(w, r, http.MethodPost)
 		return
 	}
 	user, err := s.currentUser(r)
 	if err != nil {
 		if errors.Is(err, errSessionStore) {
 			logging.Fail(r.Context(), slog.LevelError, "redis", err)
-			render(w, r, 503, "message", viewData{Error: "Session storage unavailable"})
+			s.writeError(w, r, 503, "Session storage unavailable")
 			return
 		}
-		render(w, r, 401, "message", viewData{Error: "Sign in first"})
+		s.writeError(w, r, 401, "Sign in first")
 		return
 	}
 	if !user.IsAdmin {
-		render(w, r, 403, "message", viewData{Error: "Administrator access required"})
+		s.writeError(w, r, 403, "Administrator access required")
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		render(w, r, 400, "message", viewData{Error: "Invalid form"})
+		s.writeError(w, r, 400, "Invalid form")
 		return
 	}
 	username := strings.TrimSpace(r.FormValue("username"))
 	if !validUsername(username) {
-		render(w, r, 400, "message", viewData{Error: "Username must contain 1–64 bytes"})
+		s.writeError(w, r, 400, "Username must contain 1–64 bytes")
 		return
 	}
 	id := uuid.New()
@@ -185,10 +174,10 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			render(w, r, 409, "message", viewData{Error: "That username already exists"})
+			s.writeError(w, r, 409, "That username already exists")
 		} else {
 			logging.Fail(r.Context(), slog.LevelError, "application", err)
-			render(w, r, 500, "message", viewData{Error: "Unable to create user"})
+			s.writeError(w, r, 500, "Unable to create user")
 		}
 		return
 	}
@@ -197,41 +186,41 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 	data, err := s.state(r)
 	if err != nil {
 		logging.Fail(r.Context(), slog.LevelError, "application", err)
-		render(w, r, 500, "message", viewData{Error: "User created, but unable to refresh accounts. Reload the page."})
+		s.writeError(w, r, 500, "User created, but unable to refresh accounts. Reload the page.")
 		return
 	}
 	data.Message = "User created. Choose them under Device registration links to generate their first link."
 	w.Header().Set("HX-Retarget", "#content")
-	render(w, r, 200, "state", data)
+	s.render(w, r, 200, "state", data)
 }
 
 func (s *Server) handleCreateLink(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		w.WriteHeader(405)
+		s.methodNotAllowed(w, r, http.MethodPost)
 		return
 	}
 	actor, err := s.currentUser(r)
 	if err != nil {
 		if errors.Is(err, errSessionStore) {
 			logging.Fail(r.Context(), slog.LevelError, "redis", err)
-			render(w, r, 503, "message", viewData{Error: "Session storage unavailable"})
+			s.writeError(w, r, 503, "Session storage unavailable")
 			return
 		}
-		render(w, r, 401, "message", viewData{Error: "Sign in first"})
+		s.writeError(w, r, 401, "Sign in first")
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		render(w, r, 400, "message", viewData{Error: "Invalid form"})
+		s.writeError(w, r, 400, "Invalid form")
 		return
 	}
 	minutes, err := strconv.Atoi(r.FormValue("minutes"))
 	if err != nil {
-		render(w, r, 400, "message", viewData{Error: "Enter expiration in whole minutes"})
+		s.writeError(w, r, 400, "Enter expiration in whole minutes")
 		return
 	}
 	lifetime, err := linkLifetime(minutes)
 	if err != nil {
-		render(w, r, 400, "message", viewData{Error: err.Error()})
+		s.writeError(w, r, 400, err.Error())
 		return
 	}
 	target := strings.TrimSpace(r.FormValue("username"))
@@ -239,48 +228,48 @@ func (s *Server) handleCreateLink(w http.ResponseWriter, r *http.Request) {
 		target = actor.Username
 	}
 	if target != actor.Username && !actor.IsAdmin {
-		render(w, r, 403, "message", viewData{Error: "You can only register your own devices"})
+		s.writeError(w, r, 403, "You can only register your own devices")
 		return
 	}
 	user, err := s.getUserByUsername(r.Context(), target)
 	if err != nil {
-		render(w, r, 404, "message", viewData{Error: "User not found"})
+		s.writeError(w, r, 404, "User not found")
 		return
 	}
 	token, err := randomToken()
 	if err != nil {
 		logging.Fail(r.Context(), slog.LevelError, "application", err)
-		render(w, r, 500, "message", viewData{Error: "Unable to generate link"})
+		s.writeError(w, r, 500, "Unable to generate link")
 		return
 	}
 	link := strings.TrimRight(s.cfg.Origin, "/") + "/register#" + token
 	png, err := qrcode.Encode(link, qrcode.Medium, 320)
 	if err != nil {
 		logging.Fail(r.Context(), slog.LevelError, "application", err)
-		render(w, r, 500, "message", viewData{Error: "Unable to generate QR code"})
+		s.writeError(w, r, 500, "Unable to generate QR code")
 		return
 	}
 	expires := time.Now().Add(lifetime)
 	_, err = s.db.ExecContext(r.Context(), `INSERT INTO registration_links(token_hash,user_id,expires_at,created_at) VALUES($1,$2,$3,$4)`, hashToken(token), user.ID, expires.Unix(), time.Now().Unix())
 	if err != nil {
 		logging.Fail(r.Context(), slog.LevelError, "application", err)
-		render(w, r, 500, "message", viewData{Error: "Unable to save registration link"})
+		s.writeError(w, r, 500, "Unable to save registration link")
 		return
 	}
 	logging.For(r.Context()).Info("Registration link issued", "event", "registration_link.issued", "actor_user_id", userID(actor.ID), "target_user_id", userID(user.ID), "expires_at", expires.UTC())
 	// QR bytes come from our encoder, never from user-supplied HTML or URLs.
-	render(w, r, 200, "link", viewData{User: &user, Link: link, QR: template.URL("data:image/png;base64," + base64.StdEncoding.EncodeToString(png)), Expires: expires.UTC().Format(time.RFC1123)})
+	s.render(w, r, 200, "link", viewData{User: &user, Link: link, QR: template.URL("data:image/png;base64," + base64.StdEncoding.EncodeToString(png)), Expires: expires.UTC().Format(time.RFC1123)})
 }
 
 func (s *Server) handleUILogout(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		w.WriteHeader(405)
+		s.methodNotAllowed(w, r, http.MethodPost)
 		return
 	}
 	if cookie, err := r.Cookie("auth"); err == nil {
 		if err := s.sessions.DeleteAuth(r.Context(), cookie.Value); err != nil {
 			logging.Fail(r.Context(), slog.LevelError, "application", err)
-			render(w, r, 503, "message", viewData{Error: "Unable to sign out; try again"})
+			s.writeError(w, r, 503, "Unable to sign out; try again")
 			return
 		}
 		if cookie.Value != "" {
@@ -295,8 +284,8 @@ func (s *Server) handleStateAfterLogout(w http.ResponseWriter, r *http.Request) 
 	n, err := s.countUsers(r.Context())
 	if err != nil {
 		logging.Fail(r.Context(), slog.LevelError, "application", err)
-		render(w, r, 500, "message", viewData{Error: "Unable to load account"})
+		s.writeError(w, r, 500, "Unable to load account")
 		return
 	}
-	render(w, r, 200, "state", viewData{NeedsRegistration: n == 0})
+	s.render(w, r, 200, "state", viewData{NeedsRegistration: n == 0})
 }

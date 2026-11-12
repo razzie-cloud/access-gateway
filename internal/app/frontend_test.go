@@ -23,7 +23,9 @@ func TestAdminDeniedPageUsesConfiguredOrigins(t *testing.T) {
 		t.Run(tc.gateway, func(t *testing.T) {
 			s := unitServer()
 			s.cfg.Origin, s.cfg.LandingOrigin = tc.gateway, tc.landing
-			s.mux.HandleFunc("/denied", s.renderAdminDenied)
+			s.mux.HandleFunc("/denied", func(w http.ResponseWriter, r *http.Request) {
+				s.writeError(w, r, http.StatusForbidden, "Administrator access required")
+			})
 			r := httptest.NewRequest(http.MethodGet, "https://untrusted.example/denied", nil)
 			r.Header.Set("X-Forwarded-Host", "spoofed.example")
 			r.Header.Set("X-Forwarded-Uri", "/secret?token=private")

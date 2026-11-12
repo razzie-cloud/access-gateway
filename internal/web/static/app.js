@@ -6,7 +6,7 @@ const decode = (value) => Uint8Array.from(atob(value.replace(/-/g, "+").replace(
 const encode = (buffer) => btoa(String.fromCharCode(...new Uint8Array(buffer))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 
 async function api(path, body) {
-  const response = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const response = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json", "Accept": "application/json" }, body: JSON.stringify(body) });
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || "Request failed");
   return data;
@@ -67,7 +67,7 @@ document.addEventListener("submit", async (event) => {
 
 // Display server-rendered validation and authorization errors in the form's target.
 document.addEventListener("htmx:beforeSwap", (event) => {
-  if ([400, 401, 403, 404, 409, 503].includes(event.detail.xhr.status)) {
+  if ([400, 401, 403, 404, 405, 409, 413, 415, 429, 500, 503].includes(event.detail.xhr.status)) {
     event.detail.shouldSwap = true;
     event.detail.isError = false;
   }

@@ -26,35 +26,35 @@
 </body>
 </html>{{end}}
 
-{{define "admin-denied"}}<!doctype html>
+{{define "error-page"}}<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
-  <title>Administrator access required · Razzie Cloud</title>
+  <title>{{.Failure.Title}} · Razzie Cloud</title>
   <link rel="icon" href="{{.GatewayOrigin}}/static/razzie-cloud-logo.png">
   <link rel="stylesheet" href="{{.GatewayOrigin}}/static/pico.min.css">
   <link rel="stylesheet" href="{{.GatewayOrigin}}/static/app.css">
 </head>
-<body class="denied-page">
-  <main class="denied-main">
-    <div class="denied-content">
-      <article class="denied-card" aria-labelledby="denied-heading">
-        <a class="denied-brand" href="{{.LandingOrigin}}/" aria-label="Razzie Cloud home">
+<body class="error-page">
+  <main class="error-main">
+    <div class="error-content">
+      <article class="error-card" aria-labelledby="error-heading">
+        <a class="error-brand" href="{{.LandingOrigin}}/" aria-label="Razzie Cloud home">
           <img src="{{.GatewayOrigin}}/static/razzie-cloud-logo.png" width="104" height="104" alt="">
           <span>Razzie Cloud</span>
         </a>
-        <p class="denied-status">{{template "icon-lock"}}403 · Access denied</p>
-        <h1 id="denied-heading">Administrator access required</h1>
-        <p class="denied-explanation">You’re signed in, but your account doesn’t have permission to open this page.</p>
-        <div class="denied-actions">
+        <p class="error-status">{{if eq .Failure.Status 403}}{{template "icon-lock"}}{{else}}{{template "icon-alert"}}{{end}}{{.Failure.Status}} · {{.Failure.Label}}</p>
+        <h1 id="error-heading">{{.Failure.Title}}</h1>
+        <p class="error-explanation">{{.Failure.Message}}</p>
+        <div class="error-actions">
           <a href="{{.LandingOrigin}}/" role="button">Go to cloud home <span aria-hidden="true">→</span></a>
           <a href="{{.GatewayOrigin}}/">Manage your account</a>
         </div>
-        <p class="denied-help">Need access? Contact your Razzie Cloud administrator.</p>
+        <p class="error-help">{{.Failure.Hint}}</p>
       </article>
-      <p class="denied-footer">Razzie Cloud Access Gateway</p>
+      <p class="error-footer">Razzie Cloud Access Gateway</p>
     </div>
   </main>
 </body>
@@ -170,3 +170,5 @@
 {{define "icon-refresh"}}<svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 8a8 8 0 1 0 0 8M20 3v5h-5"/></svg>{{end}}
 {{define "icon-logout"}}<svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3H4v18h6m5-14 5 5-5 5M8 12h12"/></svg>{{end}}
 {{define "icon-settings"}}<svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></svg>{{end}}
+
+{{define "icon-alert"}}<svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v6m0 4h.01"/></svg>{{end}}

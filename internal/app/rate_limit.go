@@ -150,20 +150,20 @@ func (s *Server) enforceRateLimits(w http.ResponseWriter, r *http.Request) bool 
 	ip, now := s.clientIP(r), time.Now()
 	if !s.authenticatedForRateLimit(r) {
 		if ok, retry := s.limits.allow(rateLimitKey{ip: ip}, anonymousRequestsPerMinute, now); !ok {
-			writeRateLimit(w, retry)
+			s.writeRateLimit(w, r, retry)
 			return false
 		}
 	}
 	if r.Method == http.MethodPost && (r.URL.Path == "/api/login/begin" || r.URL.Path == "/api/login/finish") {
 		if ok, retry := s.limits.allow(rateLimitKey{ip: ip, login: true}, loginRequestsPerMinute, now); !ok {
-			writeRateLimit(w, retry)
+			s.writeRateLimit(w, r, retry)
 			return false
 		}
 	}
 	return true
 }
 
-func writeRateLimit(w http.ResponseWriter, retry int) {
+func (s *Server) writeRateLimit(w http.ResponseWriter, r *http.Request, retry int) {
 	w.Header().Set("Retry-After", strconv.Itoa(retry))
-	writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "too many requests; try again later"})
+	s.writeError(w, r, http.StatusTooManyRequests, "too many requests; try again later")
 }

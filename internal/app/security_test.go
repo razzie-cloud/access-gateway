@@ -46,13 +46,17 @@ func TestHandlerRequestProtection(t *testing.T) {
 			assert.Equal(t, tc.status, w.Code)
 			assert.Equal(t, tc.status == http.StatusNoContent, called, "downstream handler called")
 			for name, want := range map[string]string{
-				"Cache-Control":           "no-store",
-				"Referrer-Policy":         "no-referrer",
-				"X-Content-Type-Options":  "nosniff",
-				"Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
+				"Cache-Control":          "no-store",
+				"Referrer-Policy":        "no-referrer",
+				"X-Content-Type-Options": "nosniff",
 			} {
 				assert.Equal(t, want, w.Header().Get(name), "header %s", name)
 			}
+			csp := "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
+			if tc.status >= 400 && !strings.HasPrefix(tc.contentType, "application/json") {
+				csp = "default-src 'none'; style-src https://auth.example; img-src https://auth.example; base-uri 'none'; frame-ancestors 'none'; form-action 'none'"
+			}
+			assert.Equal(t, csp, w.Header().Get("Content-Security-Policy"))
 		})
 	}
 }

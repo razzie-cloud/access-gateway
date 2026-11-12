@@ -66,6 +66,13 @@ is now implemented in the production forward-auth admin denial, using the
 existing embedded stylesheet and automatic browser light/dark preference.
 These previews remain separate static fixtures.
 
+The production gateway now reuses this layout for its other errors, with
+status-specific headings, explanations and guidance. It negotiates JSON for
+clients requesting it, while browser navigation gets HTML and `/ui/*` HTMX
+requests retain inline error fragments. See [error responses](../reference.md#error-responses)
+for format selection, absolute URLs and the shared error-page CSP. The static
+mockups continue to show the reviewed administrator-denial example.
+
 Production verification passed `go build ./...`, `go vet ./...`, `go test ./...`
 and `go test -race ./...` with disposable loopback PostgreSQL/Redis backends.
 A temporary harness exercised the real admin check and production response in

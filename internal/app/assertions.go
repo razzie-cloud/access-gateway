@@ -120,7 +120,7 @@ func (s *Server) signIdentity(ctx context.Context, now time.Time, id, name, audi
 
 func (s *Server) handleAssertionKeys(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
-		w.WriteHeader(http.StatusMethodNotAllowed)
+		s.methodNotAllowed(w, r, "GET, HEAD")
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
@@ -128,7 +128,7 @@ func (s *Server) handleAssertionKeys(w http.ResponseWriter, r *http.Request) {
 	set, err := s.assertionKeys(ctx, time.Now().UTC())
 	if err != nil {
 		logging.FailKind(r.Context(), slog.LevelError, "redis", "signing_keys")
-		http.Error(w, "Signing keys unavailable", http.StatusServiceUnavailable)
+		s.writeError(w, r, http.StatusServiceUnavailable, "Signing keys unavailable")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")

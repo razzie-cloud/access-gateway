@@ -18,7 +18,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/razzie-cloud/access-gateway/internal/logging"
-	"github.com/razzie-cloud/access-gateway/internal/web"
 )
 
 func (s *Server) routes() {
@@ -30,7 +29,7 @@ func (s *Server) routes() {
 	handle("/forward_auth", s.handleForwardAuth)
 	handle("/forward_auth/admin", s.handleAdminForwardAuth)
 	handle("/auth/authorize", s.handleAuthorize)
-	s.mux.Handle("/static/", logging.Route("/static/", http.FileServer(http.FS(web.Assets))))
+	handle("/static/", s.handleStatic)
 	handle("/", s.handlePage)
 	handle("/register", s.handlePage)
 	handle("/ui/state", s.handleState)
@@ -66,7 +65,7 @@ func readJSON(r *http.Request, v any) error {
 
 func (s *Server) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		w.WriteHeader(http.StatusMethodNotAllowed)
+		s.methodNotAllowed(w, r, http.MethodGet)
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
@@ -75,7 +74,7 @@ func (s *Server) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 	n, err := s.countUsers(ctx)
 	if err != nil {
 		logging.Fail(r.Context(), slog.LevelError, "postgres", err)
-		writeJSON(w, 500, map[string]string{"error": "db error"})
+		s.writeError(w, r, 500, "db error")
 		return
 	}
 	writeJSON(w, 200, map[string]any{"needsRegistration": n == 0})
@@ -90,12 +89,12 @@ type registerBeginReq struct {
 
 func (s *Server) handleRegisterBegin(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		w.WriteHeader(405)
+		s.methodNotAllowed(w, r, http.MethodPost)
 		return
 	}
 	var req registerBeginReq
 	if err := readJSON(r, &req); err != nil {
-		writeJSON(w, 400, map[string]string{"error": "bad json"})
+		s.writeError(w, r, 400, "bad json")
 		return
 	}
 	req.DeviceName = strings.TrimSpace(req.DeviceName)
@@ -103,7 +102,7 @@ func (s *Server) handleRegisterBegin(w http.ResponseWriter, r *http.Request) {
 		req.DeviceName = "Unnamed device"
 	}
 	if !validDeviceName(req.DeviceName) {
-		writeJSON(w, 400, map[string]string{"error": "device name must contain 1–80 characters without control characters"})
+		s.writeError(w, r, 400, "device name must contain 1–80 characters without control characters")
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
@@ -113,24 +112,24 @@ func (s *Server) handleRegisterBegin(w http.ResponseWriter, r *http.Request) {
 	if req.LinkToken != "" {
 		// A link always determines the account; never accept a username override.
 		if req.Username != "" || req.Token != "" {
-			writeJSON(w, 400, map[string]string{"error": "ambiguous registration"})
+			s.writeError(w, r, 400, "ambiguous registration")
 			return
 		}
 		registration, err = s.registrationFromLink(ctx, req.LinkToken)
 	} else {
 		req.Username = strings.TrimSpace(req.Username)
 		if !validUsername(req.Username) || req.Token == "" {
-			writeJSON(w, 400, map[string]string{"error": "username and bootstrap token required"})
+			s.writeError(w, r, 400, "username and bootstrap token required")
 			return
 		}
 		n, countErr := s.countUsers(ctx)
 		if countErr != nil {
 			logging.Fail(r.Context(), slog.LevelError, "postgres", countErr)
-			writeJSON(w, 500, map[string]string{"error": "db error"})
+			s.writeError(w, r, 500, "db error")
 			return
 		}
 		if n > 0 {
-			writeJSON(w, 409, map[string]string{"error": "registration closed"})
+			s.writeError(w, r, 409, "registration closed")
 			return
 		}
 		err = s.validateBootstrapToken(ctx, req.Token)
@@ -138,7 +137,7 @@ func (s *Server) handleRegisterBegin(w http.ResponseWriter, r *http.Request) {
 		registration = registrationContext{User: User{ID: id[:], Username: req.Username, IsAdmin: true}, BootstrapHash: hashToken(req.Token)}
 	}
 	if err != nil {
-		writeJSON(w, 403, map[string]string{"error": "invalid, expired or used registration token"})
+		s.writeError(w, r, 403, "invalid, expired or used registration token")
 		return
 	}
 	registration.DeviceName = req.DeviceName
@@ -148,7 +147,7 @@ func (s *Server) handleRegisterBegin(w http.ResponseWriter, r *http.Request) {
 		waUser, err = s.loadWebAuthnUser(ctx, registration.User)
 		if err != nil {
 			logging.Fail(r.Context(), slog.LevelError, "postgres", err)
-			writeJSON(w, 500, map[string]string{"error": "db error"})
+			s.writeError(w, r, 500, "db error")
 			return
 		}
 	}
@@ -167,13 +166,13 @@ func (s *Server) handleRegisterBegin(w http.ResponseWriter, r *http.Request) {
 	)
 	if err != nil {
 		logging.Fail(r.Context(), slog.LevelError, "webauthn", err)
-		writeJSON(w, 500, map[string]string{"error": "webauthn error"})
+		s.writeError(w, r, 500, "webauthn error")
 		return
 	}
 	sid := newSID()
 	if err := s.sessions.PutRegistration(r.Context(), sid, registration, *sd); err != nil {
 		logging.Fail(r.Context(), slog.LevelError, "redis", err)
-		writeJSON(w, 503, map[string]string{"error": "session storage unavailable"})
+		s.writeError(w, r, 503, "session storage unavailable")
 		return
 	}
 	s.setCookie(w, "sid", sid, 0)
@@ -182,28 +181,28 @@ func (s *Server) handleRegisterBegin(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleRegisterFinish(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		w.WriteHeader(405)
+		s.methodNotAllowed(w, r, http.MethodPost)
 		return
 	}
 	sid, err := r.Cookie("sid")
 	if err != nil || sid.Value == "" {
-		writeJSON(w, 400, map[string]string{"error": "missing sid"})
+		s.writeError(w, r, 400, "missing sid")
 		return
 	}
 	registration, sd, ok, err := s.sessions.GetRegistration(r.Context(), sid.Value)
 	if err != nil {
 		logging.Fail(r.Context(), slog.LevelError, "redis", err)
-		writeJSON(w, 503, map[string]string{"error": "session storage unavailable"})
+		s.writeError(w, r, 503, "session storage unavailable")
 		return
 	}
 	if !ok {
-		writeJSON(w, 400, map[string]string{"error": "registration session expired"})
+		s.writeError(w, r, 400, "registration session expired")
 		return
 	}
 	if !registration.DiscoverableRequired {
 		// A pre-upgrade prompt may have requested a non-discoverable key.
 		// Restart before consuming its still-valid enrollment authorization.
-		writeJSON(w, http.StatusConflict, map[string]string{"error": "registration requirements changed; start registration again"})
+		s.writeError(w, r, http.StatusConflict, "registration requirements changed; start registration again")
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
@@ -213,17 +212,17 @@ func (s *Server) handleRegisterFinish(w http.ResponseWriter, r *http.Request) {
 		waUser, err = s.loadWebAuthnUser(ctx, registration.User)
 		if err != nil {
 			logging.Fail(r.Context(), slog.LevelError, "postgres", err)
-			writeJSON(w, 500, map[string]string{"error": "db error"})
+			s.writeError(w, r, 500, "db error")
 			return
 		}
 	}
 	credential, err := s.wa.FinishRegistration(waUser, sd, r)
 	if err != nil {
-		writeJSON(w, 400, map[string]string{"error": "webauthn finish failed"})
+		s.writeError(w, r, 400, "webauthn finish failed")
 		return
 	}
 	if credential.Extensions.RK != nil && !*credential.Extensions.RK {
-		writeJSON(w, 400, map[string]string{"error": "a discoverable passkey is required"})
+		s.writeError(w, r, 400, "a discoverable passkey is required")
 		return
 	}
 	// Older clients may omit credProps even though residentKey=required
@@ -232,10 +231,10 @@ func (s *Server) handleRegisterFinish(w http.ResponseWriter, r *http.Request) {
 	credential.Extensions.RK = &discoverable
 	if err := s.completeRegistration(ctx, registration, credential); err != nil {
 		if errors.Is(err, errRegistrationUnavailable) {
-			writeJSON(w, 409, map[string]string{"error": "registration link expired, used, or bootstrap already completed"})
+			s.writeError(w, r, 409, "registration link expired, used, or bootstrap already completed")
 		} else {
 			logging.Fail(r.Context(), slog.LevelError, "postgres", err)
-			writeJSON(w, 500, map[string]string{"error": "failed to store credential"})
+			s.writeError(w, r, 500, "failed to store credential")
 		}
 		return
 	}
@@ -258,23 +257,23 @@ func (s *Server) rejectLogin(w http.ResponseWriter, r *http.Request, username, r
 	// Quote and bound attacker-controlled names. Never log bearer cookies,
 	// challenges, signatures, bootstrap tokens or registration links.
 	logging.For(r.Context()).Warn("Login rejected", "event", "login.rejected", "client_ip", s.clientIP(r).String(), "claimed_username", username[:min(len(username), 64)], "reason", reason)
-	writeJSON(w, http.StatusUnauthorized, map[string]string{"error": loginFailureMessage})
+	s.writeError(w, r, http.StatusUnauthorized, loginFailureMessage)
 }
 
 func (s *Server) handleLoginBegin(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
+		s.methodNotAllowed(w, r, http.MethodPost)
 		return
 	}
 
 	var req loginBeginReq
 	if err := readJSON(r, &req); err != nil {
-		writeJSON(w, 400, map[string]string{"error": "bad json"})
+		s.writeError(w, r, 400, "bad json")
 		return
 	}
 	req.Username = strings.TrimSpace(req.Username)
 	if !validUsername(req.Username) {
-		writeJSON(w, 400, map[string]string{"error": "username must contain 1–64 bytes"})
+		s.writeError(w, r, 400, "username must contain 1–64 bytes")
 		return
 	}
 	// Record the attempt before the browser prompt, including canceled prompts
@@ -285,14 +284,14 @@ func (s *Server) handleLoginBegin(w http.ResponseWriter, r *http.Request) {
 	allowed, user, err := s.loginCredentials(ctx, req.Username)
 	if err != nil {
 		logging.Fail(r.Context(), slog.LevelError, "application", err)
-		writeJSON(w, 503, map[string]string{"error": "unable to sign in; try again later"})
+		s.writeError(w, r, 503, "unable to sign in; try again later")
 		return
 	}
 	opts, sessionData, err := s.wa.BeginLogin(user,
 		webauthn.WithUserVerification(protocol.VerificationPreferred), webauthn.WithAllowedCredentials(allowed))
 	if err != nil {
 		logging.Fail(r.Context(), slog.LevelError, "webauthn", err)
-		writeJSON(w, 500, map[string]string{"error": "webauthn error"})
+		s.writeError(w, r, 500, "webauthn error")
 		return
 	}
 
@@ -305,7 +304,7 @@ func (s *Server) handleLoginBegin(w http.ResponseWriter, r *http.Request) {
 	sid := newSID()
 	if err := s.sessions.PutLogin(ctx, sid, req.Username, *sessionData); err != nil {
 		logging.Fail(r.Context(), slog.LevelError, "redis", err)
-		writeJSON(w, 503, map[string]string{"error": "session storage unavailable"})
+		s.writeError(w, r, 503, "session storage unavailable")
 		return
 	}
 	s.setCookie(w, "sid", sid, 0)
@@ -315,7 +314,7 @@ func (s *Server) handleLoginBegin(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleLoginFinish(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
+		s.methodNotAllowed(w, r, http.MethodPost)
 		return
 	}
 	sid, err := r.Cookie("sid")
@@ -330,7 +329,7 @@ func (s *Server) handleLoginFinish(w http.ResponseWriter, r *http.Request) {
 	claimedUsername, sd, ok, err := s.sessions.GetLogin(ctx, sid.Value)
 	if err != nil {
 		logging.Fail(r.Context(), slog.LevelError, "redis", err)
-		writeJSON(w, 503, map[string]string{"error": "session storage unavailable"})
+		s.writeError(w, r, 503, "session storage unavailable")
 		return
 	}
 	if !ok {
@@ -347,7 +346,7 @@ func (s *Server) handleLoginFinish(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if !errors.Is(err, sql.ErrNoRows) {
 			logging.Fail(r.Context(), slog.LevelError, "application", err)
-			writeJSON(w, 503, map[string]string{"error": "unable to sign in; try again later"})
+			s.writeError(w, r, 503, "unable to sign in; try again later")
 		} else {
 			s.rejectLogin(w, r, claimedUsername, "invalid assertion or unknown credential")
 		}
@@ -356,7 +355,7 @@ func (s *Server) handleLoginFinish(w http.ResponseWriter, r *http.Request) {
 	user, err := s.loadWebAuthnUser(ctx, u)
 	if err != nil {
 		logging.Fail(r.Context(), slog.LevelError, "application", err)
-		writeJSON(w, 503, map[string]string{"error": "unable to sign in; try again later"})
+		s.writeError(w, r, 503, "unable to sign in; try again later")
 		return
 	}
 	// Named login checks the session's account ID and allowlist, and verifies
@@ -374,12 +373,12 @@ func (s *Server) handleLoginFinish(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, errSessionStore) {
 			logging.Fail(r.Context(), slog.LevelError, "redis", err)
-			writeJSON(w, 503, map[string]string{"error": "session storage unavailable"})
+			s.writeError(w, r, 503, "session storage unavailable")
 		} else if errors.Is(err, sql.ErrNoRows) {
 			s.rejectLogin(w, r, claimedUsername, "device removed")
 		} else {
 			logging.Fail(r.Context(), slog.LevelError, "application", err)
-			writeJSON(w, 500, map[string]string{"error": "failed to complete login"})
+			s.writeError(w, r, 500, "failed to complete login")
 		}
 		return
 	}
@@ -398,7 +397,7 @@ func (s *Server) handleLoginFinish(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		w.WriteHeader(http.StatusMethodNotAllowed)
+		s.methodNotAllowed(w, r, http.MethodGet)
 		return
 	}
 	c, err := r.Cookie("auth")
@@ -409,7 +408,7 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	u, ok, err := s.sessions.GetAuth(r.Context(), c.Value)
 	if err != nil {
 		logging.Fail(r.Context(), slog.LevelError, "redis", err)
-		writeJSON(w, 503, map[string]string{"error": "session storage unavailable"})
+		s.writeError(w, r, 503, "session storage unavailable")
 		return
 	}
 	writeJSON(w, 200, map[string]any{"authenticated": ok, "username": u})
@@ -417,14 +416,14 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
+		s.methodNotAllowed(w, r, http.MethodPost)
 		return
 	}
 	c, err := r.Cookie("auth")
 	if err == nil && c.Value != "" {
 		if err := s.sessions.DeleteAuth(r.Context(), c.Value); err != nil {
 			logging.Fail(r.Context(), slog.LevelError, "redis", err)
-			writeJSON(w, 503, map[string]string{"error": "session storage unavailable"})
+			s.writeError(w, r, 503, "session storage unavailable")
 			return
 		}
 		if c.Value != "" {

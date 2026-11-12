@@ -175,17 +175,17 @@ func (s *Server) handleAdminForwardAuth(w http.ResponseWriter, r *http.Request) 
 
 func (s *Server) forwardAuth(w http.ResponseWriter, r *http.Request, requireAdmin bool) {
 	if r.Method != http.MethodGet {
-		w.WriteHeader(http.StatusMethodNotAllowed)
+		s.methodNotAllowed(w, r, http.MethodGet)
 		return
 	}
 	if len(s.cfg.ForwardAuthOrigins) == 0 {
 		logging.FailKind(r.Context(), slog.LevelError, "forward_auth", "not_configured")
-		http.Error(w, "Forward authentication is not configured", http.StatusServiceUnavailable)
+		s.writeError(w, r, http.StatusServiceUnavailable, "Forward authentication is not configured")
 		return
 	}
 	target, err := s.forwardedAppURL(r)
 	if err != nil {
-		http.Error(w, "Invalid forwarded app request", http.StatusBadRequest)
+		s.writeError(w, r, http.StatusBadRequest, "Invalid forwarded app request")
 		return
 	}
 	origin := target.Scheme + "://" + target.Host
@@ -199,44 +199,44 @@ func (s *Server) forwardAuth(w http.ResponseWriter, r *http.Request, requireAdmi
 		username, ok, err := s.sessions.getAppAuth(r.Context(), cookie.Value, origin)
 		if err != nil {
 			logging.Fail(r.Context(), slog.LevelError, "redis", err)
-			http.Error(w, "Session storage unavailable", http.StatusServiceUnavailable)
+			s.writeError(w, r, http.StatusServiceUnavailable, "Session storage unavailable")
 			return
 		}
 		if ok {
 			user, err := s.getUserByUsername(r.Context(), username)
 			if errors.Is(err, sql.ErrNoRows) {
-				http.Error(w, "User no longer exists", http.StatusUnauthorized)
+				s.writeError(w, r, http.StatusUnauthorized, "User no longer exists")
 				return
 			}
 			if err != nil {
 				logging.Fail(r.Context(), slog.LevelError, "postgres", err)
-				http.Error(w, "Unable to validate user", http.StatusServiceUnavailable)
+				s.writeError(w, r, http.StatusServiceUnavailable, "Unable to validate user")
 				return
 			}
 			if requireAdmin && !user.IsAdmin {
-				s.renderAdminDenied(w, r)
+				s.writeError(w, r, http.StatusForbidden, "Administrator access required")
 				return
 			}
 			if strings.ContainsFunc(user.Username, func(r rune) bool { return r < 32 || r == 127 }) {
 				logging.FailKind(r.Context(), slog.LevelError, "forward_auth", "invalid_username_header")
-				http.Error(w, "User name cannot be sent as an HTTP header", http.StatusInternalServerError)
+				s.writeError(w, r, http.StatusInternalServerError, "User name cannot be sent as an HTTP header")
 				return
 			}
 			id, err := uuid.FromBytes(user.ID)
 			if err != nil {
 				logging.Fail(r.Context(), slog.LevelError, "application", err)
-				http.Error(w, "Invalid user ID", http.StatusInternalServerError)
+				s.writeError(w, r, http.StatusInternalServerError, "Invalid user ID")
 				return
 			}
 			method := r.Header.Get("X-Forwarded-Method")
 			if len(r.Header.Values("X-Forwarded-Method")) != 1 || method == "" || strings.ContainsAny(method, " ,\t\r\n") {
-				http.Error(w, "Invalid forwarded method", http.StatusBadRequest)
+				s.writeError(w, r, http.StatusBadRequest, "Invalid forwarded method")
 				return
 			}
 			signed, err := s.signIdentity(r.Context(), time.Now().UTC(), id.String(), user.Username, origin, method, target.RequestURI(), requireAdmin)
 			if err != nil {
 				logging.FailKind(r.Context(), slog.LevelError, "redis", "signing_keys")
-				http.Error(w, "Signing keys unavailable", http.StatusServiceUnavailable)
+				s.writeError(w, r, http.StatusServiceUnavailable, "Signing keys unavailable")
 				return
 			}
 			w.Header().Set(assertionHeader, signed)
@@ -249,7 +249,7 @@ func (s *Server) forwardAuth(w http.ResponseWriter, r *http.Request, requireAdmi
 	flow, state, err := s.sessions.beginAppLogin(r.Context(), origin, target.String())
 	if err != nil {
 		logging.Fail(r.Context(), slog.LevelError, "application", err)
-		http.Error(w, "Unable to start sign-in; try again later", http.StatusServiceUnavailable)
+		s.writeError(w, r, http.StatusServiceUnavailable, "Unable to start sign-in; try again later")
 		return
 	}
 	setAppCookie(w, origin, "state_"+flow, state, int(appLoginTTL.Seconds()))
@@ -258,18 +258,18 @@ func (s *Server) forwardAuth(w http.ResponseWriter, r *http.Request, requireAdmi
 
 func (s *Server) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		w.WriteHeader(http.StatusMethodNotAllowed)
+		s.methodNotAllowed(w, r, http.MethodGet)
 		return
 	}
 	flowID := r.URL.Query().Get("flow")
 	flow, ok, err := s.sessions.appLogin(r.Context(), flowID)
 	if err != nil {
 		logging.Fail(r.Context(), slog.LevelError, "redis", err)
-		http.Error(w, "Session storage unavailable", http.StatusServiceUnavailable)
+		s.writeError(w, r, http.StatusServiceUnavailable, "Session storage unavailable")
 		return
 	}
 	if !ok || !s.allowedAppOrigin(flow.origin) {
-		http.Error(w, "Sign-in expired; return to the app and try again", http.StatusBadRequest)
+		s.writeError(w, r, http.StatusBadRequest, "Sign-in expired; return to the app and try again")
 		return
 	}
 	cookie, err := r.Cookie("auth")
@@ -277,7 +277,7 @@ func (s *Server) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 		code, ok, err := s.sessions.authorizeAppLogin(r.Context(), flowID, cookie.Value)
 		if err != nil {
 			logging.Fail(r.Context(), slog.LevelError, "redis", err)
-			http.Error(w, "Session storage unavailable", http.StatusServiceUnavailable)
+			s.writeError(w, r, http.StatusServiceUnavailable, "Session storage unavailable")
 			return
 		}
 		if ok {
@@ -291,37 +291,38 @@ func (s *Server) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 	data, err := s.state(r)
 	if err != nil {
 		logging.Fail(r.Context(), slog.LevelError, "application", err)
-		http.Error(w, "Unable to load sign-in", http.StatusServiceUnavailable)
+		s.writeError(w, r, http.StatusServiceUnavailable, "Unable to load sign-in")
 		return
 	}
 	data.LandingOrigin = s.cfg.LandingOrigin
-	render(w, r, http.StatusOK, "page", data)
+	s.render(w, r, http.StatusOK, "page", data)
 }
 
 func (s *Server) handleAppCallback(w http.ResponseWriter, r *http.Request, origin string, target *url.URL) {
 	if r.Header.Get("X-Forwarded-Method") != http.MethodGet {
-		http.Error(w, "Callback requires GET", http.StatusMethodNotAllowed)
+		w.Header().Set("Allow", http.MethodGet)
+		s.writeError(w, r, http.StatusMethodNotAllowed, "Callback requires GET")
 		return
 	}
 	query, err := url.ParseQuery(target.RawQuery)
 	if err != nil || len(query["state"]) != 1 || len(query["code"]) != 1 {
-		http.Error(w, "Invalid sign-in callback", http.StatusBadRequest)
+		s.writeError(w, r, http.StatusBadRequest, "Invalid sign-in callback")
 		return
 	}
 	flowID := query.Get("state")
 	cookie, err := r.Cookie(appCookieName(origin, "state_"+flowID))
 	if err != nil {
-		http.Error(w, "Missing sign-in state; return to the app and try again", http.StatusBadRequest)
+		s.writeError(w, r, http.StatusBadRequest, "Missing sign-in state; return to the app and try again")
 		return
 	}
 	token, returnTo, ttl, ok, err := s.sessions.completeAppLogin(r.Context(), flowID, query.Get("code"), cookie.Value, origin)
 	if err != nil {
 		logging.Fail(r.Context(), slog.LevelError, "redis", err)
-		http.Error(w, "Session storage unavailable", http.StatusServiceUnavailable)
+		s.writeError(w, r, http.StatusServiceUnavailable, "Session storage unavailable")
 		return
 	}
 	if !ok {
-		http.Error(w, "Invalid or expired sign-in; return to the app and try again", http.StatusBadRequest)
+		s.writeError(w, r, http.StatusBadRequest, "Invalid or expired sign-in; return to the app and try again")
 		return
 	}
 	// Persist across browser restarts without starting a fresh auth lifetime.

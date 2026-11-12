@@ -14,16 +14,16 @@ import (
 
 func (s *Server) activityActor(w http.ResponseWriter, r *http.Request, method string) (User, bool) {
 	if r.Method != method {
-		w.WriteHeader(http.StatusMethodNotAllowed)
+		s.methodNotAllowed(w, r, method)
 		return User{}, false
 	}
 	actor, err := s.currentUser(r)
 	if err != nil {
 		if errors.Is(err, errSessionStore) {
 			logging.Fail(r.Context(), slog.LevelError, "redis", err)
-			render(w, r, 503, "message", viewData{Error: "Session storage unavailable"})
+			s.writeError(w, r, 503, "Session storage unavailable")
 		} else {
-			render(w, r, 401, "message", viewData{Error: "Sign in first"})
+			s.writeError(w, r, 401, "Sign in first")
 		}
 		return User{}, false
 	}
@@ -95,11 +95,11 @@ func (s *Server) renderActivity(w http.ResponseWriter, r *http.Request, actor Us
 			status = http.StatusServiceUnavailable
 		}
 		logging.Fail(r.Context(), slog.LevelError, "load_activity", err)
-		render(w, r, status, "message", viewData{Error: "Unable to load devices and sessions. Try refreshing the panel."})
+		s.writeError(w, r, status, "Unable to load devices and sessions. Try refreshing the panel.")
 		return
 	}
 	data.Message = message
-	render(w, r, 200, "activity", data)
+	s.render(w, r, 200, "activity", data)
 }
 
 func (s *Server) handleRenameDevice(w http.ResponseWriter, r *http.Request) {
@@ -116,19 +116,19 @@ func (s *Server) handleDeviceChange(w http.ResponseWriter, r *http.Request, rena
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		render(w, r, 400, "message", viewData{Error: "Invalid form"})
+		s.writeError(w, r, 400, "Invalid form")
 		return
 	}
 	id, err := strconv.ParseInt(r.PostForm.Get("device_id"), 10, 64)
 	if err != nil || id <= 0 {
-		render(w, r, 400, "message", viewData{Error: "Invalid device"})
+		s.writeError(w, r, 400, "Invalid device")
 		return
 	}
 	message := "Device removed."
 	if rename {
 		name := strings.TrimSpace(r.PostForm.Get("device_name"))
 		if !validDeviceName(name) {
-			render(w, r, 400, "message", viewData{Error: "Device name must contain 1–80 characters without control characters"})
+			s.writeError(w, r, 400, "Device name must contain 1–80 characters without control characters")
 			return
 		}
 		err = s.renameDevice(r.Context(), actor, id, name)
@@ -139,15 +139,15 @@ func (s *Server) handleDeviceChange(w http.ResponseWriter, r *http.Request, rena
 	if err != nil {
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
-			render(w, r, 404, "message", viewData{Error: "Device not found"})
+			s.writeError(w, r, 404, "Device not found")
 		case errors.Is(err, errDeviceInUse):
-			render(w, r, 409, "message", viewData{Error: "End this device’s sessions before removing it. Older sessions with an unknown device must also be ended."})
+			s.writeError(w, r, 409, "End this device’s sessions before removing it. Older sessions with an unknown device must also be ended.")
 		case errors.Is(err, errSessionStore):
 			logging.Fail(r.Context(), slog.LevelError, "redis", err)
-			render(w, r, 503, "message", viewData{Error: "Session storage unavailable"})
+			s.writeError(w, r, 503, "Session storage unavailable")
 		default:
 			logging.Fail(r.Context(), slog.LevelError, "application", err)
-			render(w, r, 500, "message", viewData{Error: "Unable to update device"})
+			s.writeError(w, r, 500, "Unable to update device")
 		}
 		return
 	}
@@ -165,18 +165,18 @@ func (s *Server) handleRemoveSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		render(w, r, 400, "message", viewData{Error: "Invalid form"})
+		s.writeError(w, r, 400, "Invalid form")
 		return
 	}
 	id, kind := r.PostForm.Get("session_id"), r.PostForm.Get("kind")
 	if !validSessionID(id) || (kind != "Gateway" && kind != "Application") {
-		render(w, r, 400, "message", viewData{Error: "Invalid session"})
+		s.writeError(w, r, 400, "Invalid session")
 		return
 	}
 	sessions, err := s.sessions.ListSessions(r.Context())
 	if err != nil {
 		logging.Fail(r.Context(), slog.LevelError, "redis", err)
-		render(w, r, 503, "message", viewData{Error: "Session storage unavailable"})
+		s.writeError(w, r, 503, "Session storage unavailable")
 		return
 	}
 	cookie, _ := r.Cookie("auth")
@@ -186,17 +186,17 @@ func (s *Server) handleRemoveSession(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if session.ID == currentID || session.ParentID == currentID {
-			render(w, r, 409, "message", viewData{Error: "This browser’s sessions are in use. Use Sign out to end them."})
+			s.writeError(w, r, 409, "This browser’s sessions are in use. Use Sign out to end them.")
 			return
 		}
 		if err := s.sessions.DeleteSession(r.Context(), kind, id); err != nil {
 			logging.Fail(r.Context(), slog.LevelError, "application", err)
-			render(w, r, 503, "message", viewData{Error: "Unable to remove session"})
+			s.writeError(w, r, 503, "Unable to remove session")
 			return
 		}
 		logging.For(r.Context()).Info("Session revoked", "event", "session.revoked", "actor_user_id", userID(actor.ID), "session_kind", kind)
 		s.renderActivity(w, r, actor, "Session removed.")
 		return
 	}
-	render(w, r, 404, "message", viewData{Error: "Session not found"})
+	s.writeError(w, r, 404, "Session not found")
 }

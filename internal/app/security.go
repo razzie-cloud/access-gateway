@@ -25,13 +25,13 @@ func (s *Server) handler() http.Handler {
 		}
 		if r.Method == http.MethodPost {
 			if r.Header.Get("Origin") != strings.TrimRight(s.cfg.Origin, "/") {
-				writeJSON(w, 403, map[string]string{"error": "request origin not allowed"})
+				s.writeError(w, r, 403, "request origin not allowed")
 				return
 			}
 			if strings.HasPrefix(r.URL.Path, "/api/") {
 				mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 				if err != nil || mediaType != "application/json" {
-					writeJSON(w, 415, map[string]string{"error": "application/json required"})
+					s.writeError(w, r, 415, "application/json required")
 					return
 				}
 			}

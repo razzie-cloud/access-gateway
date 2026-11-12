@@ -183,6 +183,37 @@ Redis tests clean up only their random key namespaces. PostgreSQL tests create
 and drop random schemas. Without these variables the corresponding integration
 tests skip; ordinary unit tests still run.
 
+## Error responses
+
+Browser errors share a centered Razzie Cloud page with the logo, HTTP status,
+an explanation, guidance and absolute cloud-home/account links. This covers
+authorization and sign-in/callback failures, API validation failures, request
+protection, rate limits, unsupported methods and missing/invalid static assets.
+Status codes remain unchanged; 429 retains `Retry-After`, and 405 includes `Allow`.
+
+Errors negotiate between HTML and `application/json` using `Accept` quality
+values and media-range specificity. HTML is the default and wins equal explicit
+preferences. An explicit JSON preference returns the existing `{"error":"…"}`
+shape and original message. With no `Accept` preference (absent or `*/*`), a
+JSON request `Content-Type` also selects JSON for compatibility. Explicit HTML
+preferences take precedence over the request body format. The passkey bridge
+explicitly requests JSON. Successful API responses remain JSON.
+
+HTMX requests to `/ui/*` retain inline HTML error fragments in the existing form
+target, preserving drafts and the application shell. Direct navigation gets the
+complete shared page; an explicit JSON preference takes precedence over HTMX.
+Error responses vary on `Accept`, `Content-Type` and `HX-Request` and remain
+`no-store`. HEAD errors include the same status/headers without a response body.
+Health probes keep their plain-text operational contract.
+
+Error pages use absolute configured `ORIGIN` asset/account URLs and
+`LANDING_ORIGIN` home links, including when shown on a protected app hostname.
+Their CSP permits only gateway styles/images, disabling scripts, connections,
+forms and framing. Inline HTMX errors retain the normal gateway CSP.
+Neither rendering nor format negotiation reads backend state or echoes request
+URLs, callback codes or credentials. If the error template itself fails, the
+last-resort response is a generic plain-text 500 to avoid recursive rendering.
+
 ## Protect apps with Caddy
 
 Set `ORIGIN` to the gateway's public URL and `FORWARD_AUTH_ORIGINS` (or
@@ -250,13 +281,9 @@ identity headers; regular users receive **403 Administrator access required**
 without identity headers or a sign-in redirect. Role changes apply on the next
 request, including for existing app sessions. Missing or expired sessions follow
 the normal sign-in flow; deleted users receive 401 and dependency failures 503.
-The role-denial response is a branded HTML page with automatic light/dark styling,
-a cloud-home button and an account-management link. Its asset/account URLs use
-configured `ORIGIN`, and home links use `LANDING_ORIGIN` (default
-`https://razzie.cloud`). All are absolute because the proxy displays the response
-on the app's hostname. A response-specific CSP permits styles/images from the
-gateway origin and disables scripts, connections, forms and framing. The normal
-gateway CSP is unchanged.
+The role denial uses the shared [error response layout and negotiation](#error-responses),
+with automatic light/dark styling and the reviewed administrator-access message.
+`LANDING_ORIGIN` defaults to `https://razzie.cloud`.
 
 Keep `/_auth/callback` behind forward auth. For a whole admin-only app it can use
 `/forward_auth/admin`; for mixed regular/admin paths on one hostname, route the

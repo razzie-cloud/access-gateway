@@ -47,6 +47,14 @@ for browser WebAuthn APIs and status/HTMX integration.
 - Keep HTMX evaluation, indicator style injection, and history snapshots disabled
   to work with CSP and avoid caching registration secrets. No inline JS/CSS.
 - Use html/template escaping; only generated QR PNG data URLs are trusted URLs.
+- Route handler errors through `Server.writeError` in `errors.go`. It negotiates
+  JSON using Accept quality/specificity, defaults to the shared `error-page`
+  template, and retains `/ui/*` HTMX error fragments. With absent/wildcard Accept,
+  JSON request Content-Type retains legacy JSON errors. The passkey bridge sends
+  explicit Accept: application/json. Preserve existing JSON error strings/statuses,
+  Retry-After/Allow, HEAD body suppression and the plain-text health probe contract.
+  Full error pages use configured absolute asset/navigation URLs and a CSP that
+  permits only gateway styles/images; fragment errors keep the live shell's CSP.
 
 ## Backend architecture
 
@@ -202,12 +210,12 @@ absolute registration URLs from untrusted Host or forwarded headers.
   malformed/unlisted forwarded origins return 400. Unknown paths return 404.
 - GET /forward_auth/admin shares the same SSO flow and app sessions, but requires
   the user's current PostgreSQL is_admin value before returning 204/identity
-  headers. Regular users receive a branded HTML 403 without a login redirect.
+  headers. Regular users receive a negotiated 403 without a login redirect.
   Its assets/account link use absolute configured ORIGIN URLs and cloud-home
-  links use LANDING_ORIGIN. The denial-only CSP permits gateway styles/images
+  links use LANDING_ORIGIN. The shared error-page CSP permits gateway styles/images
   and disables scripts; the page must work when displayed on an app hostname.
-  Both endpoints complete /_auth/callback with a 303; the redirected app request enforces the
-  selected policy. Never cache roles or exempt callbacks from forward auth.
+  Both endpoints complete /_auth/callback with a 303; the redirected app request
+  enforces the selected policy. Never cache roles or exempt callbacks from forward auth.
 - The gateway session must never be accepted as an app session or copied to an
   app. App sessions bind to exact allowed origins and live gateway sessions.
   Logging out of the gateway revokes derived app sessions. User lookup failures
