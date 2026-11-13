@@ -1,7 +1,7 @@
 # Access Gateway design concept
 
 Serve the **Razzie Cloud parent directory** with
-`python3 -m http.server 8765 --bind 127.0.0.1`, then open
+`go run scripts/serve.go`, then open
 <http://127.0.0.1:8765/access-gateway/docs/mockups/index.html>.
 
 | Screen | File | Review focus |
