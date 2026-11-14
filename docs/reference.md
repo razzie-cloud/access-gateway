@@ -37,8 +37,13 @@ code, name the device and create its passkey. The QR image can also be downloade
 
 Each link registers one passkey for its designated account and expires at the
 displayed time, even if registration is already in progress. A canceled prompt
-can be retried while the link remains valid. After registration, enter your
-username and choose **Sign in with a passkey**.
+can be retried while the link remains valid. After registration, sign-in starts
+automatically with the new passkey, without asking for a username. Complete the
+sign-in prompt to open your account. This also applies to first-administrator
+setup. A canceled or failed sign-in leaves the passkey registered; use
+**Sign in with your new passkey** to retry, or open the account page to sign in.
+Registration itself does not issue an authenticated session: a separate signed
+WebAuthn assertion must succeed through the normal login endpoints.
 Multiple devices can have separate passkeys.
 
 Login asks for a username and filters the browser's passkey choices to credentials

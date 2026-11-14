@@ -29,6 +29,10 @@ For full browser validation, use Chromium's CDP WebAuthn virtual authenticator
 with CTAP2, internal transport, resident keys and user verification; exercise
 bootstrap, login, HTMX user creation, device registration on a fresh browser
 context, reuse rejection, and login with each device credential.
+For bridge regression checks without backends, serve the repository with
+`python3 -m http.server 8765 --bind 127.0.0.1` and open
+`http://127.0.0.1:8765/tests/passkey-flow.html`. Every scenario must report PASS.
+These use fake API/authenticator responses and do not replace live acceptance.
 
 ## Frontend requirements
 
@@ -126,7 +130,10 @@ absolute registration URLs from untrusted Host or forwarded headers.
   credential and mark the link used in the same transaction. Rollback must
   preserve the link if credential insertion fails. Enrollment must never upsert
   an existing credential or overwrite another account's credential.
-- Consuming a link does not log the user in. Login is a separate WebAuthn ceremony.
+- Consuming a link does not issue an auth session. Registration finish returns
+  the token-bound username only after commit; the browser immediately runs a
+  separate signed login with the new credential. Canceled/failed login retries
+  must not repeat enrollment or reuse the consumed link.
 - Migration `00003` adds device_name to passkeys. Registration accepts optional
   deviceName, trims it and stores it in the ceremony and enrollment transaction.
   Names contain 1–80 Unicode characters without controls. Old passkeys and

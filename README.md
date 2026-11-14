@@ -23,7 +23,8 @@ docker compose logs app
 
 Open <http://localhost:8080>. Find the `bootstrap.token_created` event in the
 logs and enter its `bootstrap_token`, a username, and a device name. Complete the
-passkey prompt to create the first administrator, then sign in. The token is
+passkey prompt to create the first administrator. Sign-in starts automatically;
+complete its passkey prompt to open your account. The token is
 logged only once when generated; keep the initial logs until setup is complete.
 
 ## Enroll users and devices

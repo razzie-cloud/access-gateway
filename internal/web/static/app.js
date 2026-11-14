@@ -23,34 +23,62 @@ if (tokenInput) {
   }
 }
 
+async function passkeyCeremony(mode, body, credentialID) {
+  const options = await api(`/api/${mode}/begin`, body);
+  options.publicKey.challenge = decode(options.publicKey.challenge);
+  if (mode === "register") options.publicKey.user.id = decode(options.publicKey.user.id);
+  for (const field of ["excludeCredentials", "allowCredentials"]) {
+    if (options.publicKey[field]) options.publicKey[field] = options.publicKey[field].map(c => ({ ...c, id: decode(c.id) }));
+  }
+  if (credentialID) {
+    // Prove possession of the passkey just enrolled, even on a browser that
+    // already has other passkeys. Never fall back to an empty allowlist.
+    options.publicKey.allowCredentials = (options.publicKey.allowCredentials || []).filter(c => encode(c.id) === credentialID);
+    if (!options.publicKey.allowCredentials.length) throw new Error("The new passkey is unavailable. Open the account page to sign in.");
+  }
+  status(mode === "register" ? "Complete the passkey prompt on your device." : "Complete the passkey prompt to sign in.");
+  const credential = mode === "register" ? await navigator.credentials.create(options) : await navigator.credentials.get(options);
+  if (!credential) throw new Error("No credential was returned. You can try again.");
+  const response = { clientDataJSON: encode(credential.response.clientDataJSON) };
+  if (mode === "register") response.attestationObject = encode(credential.response.attestationObject);
+  else {
+    response.authenticatorData = encode(credential.response.authenticatorData);
+    response.signature = encode(credential.response.signature);
+    response.userHandle = credential.response.userHandle ? encode(credential.response.userHandle) : null;
+  }
+  const result = await api(`/api/${mode}/finish`, { id: credential.id, rawId: encode(credential.rawId), type: credential.type, response, clientExtensionResults: credential.getClientExtensionResults() });
+  return { result, credentialID: encode(credential.rawId) };
+}
+
+// A canceled sign-in retries login without reusing a consumed enrollment link.
+const pendingSignIns = new WeakMap();
 document.addEventListener("submit", async (event) => {
   const form = event.target.closest("form[data-webauthn]");
   if (!form) return;
   event.preventDefault();
+  if (form.getAttribute("aria-busy") === "true") return;
   const button = form.querySelector("button");
   button.disabled = true;
   form.setAttribute("aria-busy", "true");
   try {
     if (!window.PublicKeyCredential) throw new Error("Passkeys require a supported browser and HTTPS (or localhost).");
     const mode = form.dataset.webauthn;
-    const options = await api(`/api/${mode}/begin`, Object.fromEntries(new FormData(form)));
-    options.publicKey.challenge = decode(options.publicKey.challenge);
-    if (mode === "register") options.publicKey.user.id = decode(options.publicKey.user.id);
-    for (const field of ["excludeCredentials", "allowCredentials"]) {
-      if (options.publicKey[field]) options.publicKey[field] = options.publicKey[field].map(c => ({ ...c, id: decode(c.id) }));
+    if (!pendingSignIns.has(form)) {
+      const completed = await passkeyCeremony(mode, Object.fromEntries(new FormData(form)));
+      if (mode === "register") {
+        pendingSignIns.set(form, { username: completed.result.username, credentialID: completed.credentialID });
+        // Enrollment is durable even if the following login is canceled.
+        for (const name of ["linkToken", "token"]) {
+          const input = form.elements.namedItem(name);
+          if (input) input.value = "";
+        }
+        for (const input of form.querySelectorAll("input, select, textarea")) input.disabled = true;
+        button.textContent = "Sign in with your new passkey";
+      }
     }
-    status("Complete the passkey prompt on your device.");
-    const credential = mode === "register" ? await navigator.credentials.create(options) : await navigator.credentials.get(options);
-    if (!credential) throw new Error("No credential was returned. You can try again.");
-    const response = { clientDataJSON: encode(credential.response.clientDataJSON) };
-    if (mode === "register") response.attestationObject = encode(credential.response.attestationObject);
-    else {
-      response.authenticatorData = encode(credential.response.authenticatorData);
-      response.signature = encode(credential.response.signature);
-      response.userHandle = credential.response.userHandle ? encode(credential.response.userHandle) : null;
-    }
-    await api(`/api/${mode}/finish`, { id: credential.id, rawId: encode(credential.rawId), type: credential.type, response, clientExtensionResults: credential.getClientExtensionResults() });
-    if (mode === "login" && location.pathname === "/auth/authorize") {
+    const pending = pendingSignIns.get(form);
+    if (pending) await passkeyCeremony("login", { username: pending.username }, pending.credentialID);
+    if (location.pathname === "/auth/authorize") {
       location.reload();
       return;
     }
@@ -59,9 +87,12 @@ document.addEventListener("submit", async (event) => {
       location.replace("/");
       return;
     }
-    status(mode === "register" ? "Passkey registered. Sign in to continue." : "Signed in.");
+    status("Signed in.");
+    pendingSignIns.delete(form);
     htmx.trigger(document.body, "reloadState");
-  } catch (error) { status(error.message); }
+  } catch (error) {
+    status(pendingSignIns.has(form) ? `Passkey registered. Sign-in did not complete: ${error.message} Choose “Sign in with your new passkey” to retry.` : error.message);
+  }
   finally { button.disabled = false; form.removeAttribute("aria-busy"); }
 });
 

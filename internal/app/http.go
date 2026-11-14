@@ -244,7 +244,9 @@ func (s *Server) handleRegisterFinish(w http.ResponseWriter, r *http.Request) {
 		logging.For(r.Context()).Warn("Unable to remove completed registration session", "event", "registration.cleanup_failed", "operation", "delete_ceremony", "dependency", "redis", "error_kind", logging.Kind(err))
 	}
 	s.setCookie(w, "sid", "", -1)
-	writeJSON(w, 200, map[string]any{"ok": true})
+	// Only reveal the token-bound account after enrollment has committed. The
+	// browser uses it to start a separate, signed login with the new passkey.
+	writeJSON(w, 200, map[string]any{"ok": true, "username": registration.User.Username})
 }
 
 type loginBeginReq struct {
