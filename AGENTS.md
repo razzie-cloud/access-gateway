@@ -110,24 +110,33 @@ absolute registration URLs from untrusted Host or forwarded headers.
   transaction commits. Never overwrite an existing token or recreate one after
   enrollment. All participating gateway replicas must run this locking protocol.
 - Links use 32 cryptographically random bytes, hex encoded. PostgreSQL and
-  registration sessions store SHA-256 hashes, never raw tokens. Links bind to
-  a user ID and contain expires_at/used_at/created_at Unix timestamps.
+  registration sessions store SHA-256 hashes, never raw tokens. Existing-account
+  links bind to a user ID; new-user invitations have a NULL user_id until
+  consumption. Both have expires_at/used_at/created_at Unix timestamps.
 - POST /ui/links accepts `minutes` (integer 1–43200) and optional `username`.
   Authenticated users may target themselves; only admins may target others.
+  An explicitly empty username from an admin creates a new-user invitation;
+  omitted usernames retain self-enrollment. Regular users cannot issue invitations.
   Generate the QR locally with go-qrcode; never send tokens to a QR service.
 - Registration links are `${ORIGIN}/register#${token}`. The browser reads the
   fragment, removes it from history, and POSTs it as JSON `linkToken`. Never
   move the bearer secret to a query string, access log, referrer, or HTMX history.
-- Link begin derives the account exclusively from the token and rejects username
-  or bootstrap-token overrides. It excludes known discoverable credentials;
+- Existing-account link begin derives the account exclusively from the token and
+  rejects username or bootstrap-token overrides. New-user invitations accept a
+  trimmed unique username, hold a fresh UUID only in the ceremony, and create a
+  regular user at finish. POST /api/register/link accepts linkToken and exposes
+  only newUser, allowing the browser to show username entry only for invitations.
+  Enrollment excludes known discoverable credentials;
   legacy/unknown non-discoverable credentials must not block same-device upgrades.
   New ceremonies require residentKey=required and request credProps. Keep this
   requirement in the registration context; record successful new credentials as
   discoverable, and reject an explicit credProps.rk=false without consuming the link.
   Pre-upgrade registration ceremonies must restart before consuming a link.
 - Finish verifies WebAuthn first, then locks the link row FOR UPDATE. Recheck
-  expiry, unused state, and user ID after acquiring the lock. Insert a new
-  credential and mark the link used in the same transaction. Rollback must
+  expiry, unused state, and user ID after acquiring the lock. For invitations,
+  recheck that user_id is NULL and insert a regular user; never
+  reuse or upsert an existing username. Insert a new credential, bind the
+  invitation to its new user and mark the link used in the same transaction. Rollback must
   preserve the link if credential insertion fails. Enrollment must never upsert
   an existing credential or overwrite another account's credential.
 - Consuming a link does not issue an auth session. Registration finish returns

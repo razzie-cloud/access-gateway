@@ -34,7 +34,7 @@ func TestRoutesRejectWrongMethod(t *testing.T) {
 		{"POST", "/api/bootstrap"}, {"POST", "/api/me"},
 		{"POST", "/forward_auth"}, {"POST", "/forward_auth/admin"}, {"POST", "/auth/authorize"},
 		{"GET", "/ui/users"}, {"GET", "/ui/links"}, {"GET", "/ui/logout"},
-		{"GET", "/api/register/begin"}, {"GET", "/api/register/finish"},
+		{"GET", "/api/register/begin"}, {"GET", "/api/register/finish"}, {"GET", "/api/register/link"},
 		{"GET", "/api/login/begin"}, {"GET", "/api/login/finish"}, {"GET", "/api/logout"},
 	} {
 		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
@@ -50,7 +50,8 @@ func TestBeginRejectsInvalidInput(t *testing.T) {
 		{"unknown registration field", "/api/register/begin", `{"unexpected":true}`, "bad json"},
 		{"long device name", "/api/register/begin", `{"deviceName":"` + strings.Repeat("x", 81) + `"}`, "device name must contain 1–80 characters without control characters"},
 		{"control character in device name", "/api/register/begin", `{"deviceName":"name\nother"}`, "device name must contain 1–80 characters without control characters"},
-		{"link username override", "/api/register/begin", `{"linkToken":"link","username":"alice"}`, "ambiguous registration"},
+		{"malformed link lookup", "/api/register/link", `{`, "bad json"},
+		{"link lookup override", "/api/register/link", `{"linkToken":"link","username":"alice"}`, "bad json"},
 		{"link bootstrap override", "/api/register/begin", `{"linkToken":"link","token":"bootstrap"}`, "ambiguous registration"},
 		{"empty registration", "/api/register/begin", `{}`, "username and bootstrap token required"},
 		{"blank username", "/api/register/begin", `{"username":"  ","token":"bootstrap"}`, "username and bootstrap token required"},

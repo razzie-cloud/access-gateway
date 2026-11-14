@@ -10,10 +10,14 @@
   const equal = (got, expected) => assert(JSON.stringify(got) === JSON.stringify(expected), `Expected ${JSON.stringify(expected)}, got ${JSON.stringify(got)}`);
   const buffer = value => Uint8Array.from(atob(value), c => c.charCodeAt(0)).buffer;
 
-  function fixture({ mode = "register", invite = true, pathname = "/register", fail, missingKey = false, nullCredential = false } = {}) {
+  function fixture({ mode = "register", invite = true, pathname = "/register", fail, missingKey = false, nullCredential = false, newUser = false } = {}) {
     const events = {}, calls = [], prompts = [], navigations = [], refreshes = [];
     const message = { textContent: "" }, button = { disabled: false, textContent: "Create passkey" };
     const inputs = Object.fromEntries(Object.entries({ username: "untrusted-form-name", deviceName: "Phone", token: "bootstrap-secret", linkToken: "" }).map(([name, value]) => [name, { name, value, disabled: false }]));
+    inputs.username.disabled = invite;
+    inputs.token.disabled = invite;
+    const usernameLabel = { hidden: true, querySelector: () => inputs.username };
+    const description = { textContent: "Existing account" };
     const attributes = new Map();
     const form = {
       dataset: { webauthn: mode }, elements: { namedItem: name => inputs[name] },
@@ -23,7 +27,7 @@
     };
     const mockDocument = {
       body: {}, addEventListener: (name, callback) => { events[name] = callback; },
-      getElementById: id => id === "status" ? message : id === "link-token" && invite ? inputs.linkToken : null,
+      getElementById: id => id === "status" ? message : id === "link-token" && invite ? inputs.linkToken : id === "invitation-username" ? usernameLabel : id === "enrollment-description" ? description : null,
       querySelector: () => button,
     };
     const mockLocation = {
@@ -36,6 +40,7 @@
       equal(options.headers.Accept, "application/json");
       if (failure === path) { failure = null; return { ok: false, json: async () => ({ error: "simulated failure" }) }; }
       let data = { ok: true };
+      if (path === "/api/register/link") data = { newUser };
       if (path.endsWith("/begin")) {
         data = { publicKey: { challenge: "Y2hhbGxlbmdl", user: { id: "dXNlcg" },
           allowCredentials: ["b2xk", ...(missingKey ? [] : ["bmV3"]), "ZGVjb3k"].map(id => ({ type: "public-key", id })),
@@ -70,19 +75,40 @@
       class { constructor() { return Object.entries(inputs).filter(([, input]) => !input.disabled).map(([name, input]) => [name, input.value]); } },
       { trigger: (_, name) => refreshes.push(name) },
     );
-    return { calls, prompts, navigations, refreshes, message, button, inputs, attributes,
+    return { calls, prompts, navigations, refreshes, message, button, inputs, attributes, usernameLabel, description,
       submit: () => events.submit({ target: { closest: () => form }, preventDefault() {} }),
     };
   }
 
-  const paths = test => test.calls.map(call => call.path);
+  const paths = test => test.calls.map(call => call.path).filter(path => path !== "/api/register/link");
   const registrationAndLogin = ["/api/register/begin", "/api/register/finish", "/api/login/begin", "/api/login/finish"];
   const tests = {
+    async "new-user invitation asks for a username before enrollment"() {
+      const test = fixture({ newUser: true });
+      await test.submit();
+      equal(test.usernameLabel.hidden, false);
+      equal(test.calls.find(call => call.path === "/api/register/begin").body.username, "untrusted-form-name");
+      assert(test.description.textContent.includes("Choose your username"), "Explain account creation");
+      equal(test.navigations, ["/"]);
+    },
+    async "existing-account invitation omits the username"() {
+      const test = fixture();
+      await test.submit();
+      equal(test.usernameLabel.hidden, true);
+      assert(!("username" in test.calls.find(call => call.path === "/api/register/begin").body), "Existing account cannot be overridden");
+    },
+    async "failed invitation lookup retries without opening a passkey prompt"() {
+      const test = fixture({ fail: "/api/register/link" });
+      await test.submit();
+      equal(test.prompts, []);
+      await test.submit();
+      equal(test.prompts, ["create", "get"]);
+    },
     async "invitation enrolls and signs in before navigating"() {
       const test = fixture();
       await test.submit();
       equal(paths(test), registrationAndLogin);
-      equal(test.calls[2].body, { username: "token-bound-account" });
+      equal(test.calls.find(call => call.path === "/api/login/begin").body, { username: "token-bound-account" });
       equal(test.prompts, ["create", "get"]);
       equal(test.navigations, ["/"]);
       equal(test.button.disabled, false);
@@ -127,7 +153,7 @@
       equal(test.navigations, []);
       equal(test.inputs.linkToken.value, "a".repeat(64));
       equal(test.message.textContent, "simulated failure");
-      assert(Object.values(test.inputs).every(input => !input.disabled), "Registration remains retryable");
+      assert(!test.inputs.deviceName.disabled && !test.inputs.linkToken.disabled, "Registration remains retryable");
     },
     async "missing new passkey never opens an unrestricted assertion"() {
       const test = fixture({ missingKey: true });

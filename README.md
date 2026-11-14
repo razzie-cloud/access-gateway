@@ -1,7 +1,7 @@
 # Access Gateway
 
 Passkey sign-in and account management for self-hosted apps. Users enroll devices
-with single-use links or QR codes; administrators create accounts. A reverse
+with single-use links or QR codes; administrators invite new users or create accounts. A reverse
 proxy can use the gateway for shared sign-in and pass verified user identities
 to protected apps, including apps restricted to administrators.
 
@@ -29,9 +29,12 @@ logged only once when generated; keep the initial logs until setup is complete.
 
 ## Enroll users and devices
 
-As administrator, use **Create a user**, then select the account under
+As administrator, choose **<new> — recipient chooses username** under
 **Device registration links** and generate a link or QR code. Send it privately
-to the user so they can register their first passkey and sign in.
+to the recipient, who chooses a unique username and registers their first
+passkey. The regular user account is created only after enrollment succeeds.
+You can also use **Create a user** to choose the username yourself, then select
+that account when generating its link.
 
 Signed-in users can generate links for their own additional devices. Each link
 registers one passkey and expires after the selected lifetime. Treat links and

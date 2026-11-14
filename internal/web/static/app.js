@@ -14,12 +14,32 @@ async function api(path, body) {
 
 // Tokens stay out of request URLs, access logs, referrers and HTMX history snapshots.
 const tokenInput = document.getElementById("link-token");
+let invitationReady;
+function prepareInvitation() {
+  if (!/^[a-f0-9]{64}$/.test(tokenInput.value)) return Promise.reject(new Error("Open a complete registration link, or ask for a new one."));
+  if (!invitationReady) {
+    invitationReady = api("/api/register/link", { linkToken: tokenInput.value }).then(details => {
+      const label = document.getElementById("invitation-username");
+      label.hidden = !details.newUser;
+      label.querySelector("input").disabled = !details.newUser;
+      if (details.newUser) document.getElementById("enrollment-description").textContent = "Choose your username and create your first passkey to join Razzie Cloud.";
+    }).catch(error => {
+      invitationReady = null;
+      throw error;
+    });
+  }
+  return invitationReady;
+}
 if (tokenInput) {
   tokenInput.value = location.hash.slice(1);
   history.replaceState(null, "", location.pathname);
   if (!/^[a-f0-9]{64}$/.test(tokenInput.value)) {
     document.querySelector("#device-registration button").disabled = true;
     status("Open a complete registration link, or ask for a new one.");
+  } else {
+    prepareInvitation().catch(error => status(error.message)).finally(() => {
+      document.querySelector("#device-registration button").disabled = false;
+    });
   }
 }
 
@@ -64,6 +84,7 @@ document.addEventListener("submit", async (event) => {
     if (!window.PublicKeyCredential) throw new Error("Passkeys require a supported browser and HTTPS (or localhost).");
     const mode = form.dataset.webauthn;
     if (!pendingSignIns.has(form)) {
+      if (tokenInput) await prepareInvitation();
       const completed = await passkeyCeremony(mode, Object.fromEntries(new FormData(form)));
       if (mode === "register") {
         pendingSignIns.set(form, { username: completed.result.username, credentialID: completed.credentialID });

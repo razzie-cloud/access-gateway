@@ -85,7 +85,7 @@
       <div class="stack">
         <article class="aside-card" id="registration" data-navigation-target><div class="aside-title"><p class="eyebrow">Device enrollment</p><h2>Device registration links</h2><p class="muted">Create a link, then open it or scan its QR code on the device you want to register.</p></div>
           <form hx-post="/ui/links" hx-target="#link-result" hx-disabled-elt="find button">
-            {{if .User.IsAdmin}}<label for="link-account">Account</label><select id="link-account" name="username">{{range .Users}}<option value="{{.Username}}"{{if eq .Username $.User.Username}} selected{{end}}>{{.Username}}</option>{{end}}</select>{{end}}
+            {{if .User.IsAdmin}}<label for="link-account">Account</label><select id="link-account" name="username"><option value="">&lt;new&gt; — recipient chooses username</option>{{range .Users}}<option value="{{.Username}}"{{if eq .Username $.User.Username}} selected{{end}}>{{.Username}}</option>{{end}}</select>{{end}}
             <label>Expires after (minutes)<input type="number" name="minutes" min="1" max="43200" value="60" required></label>
             <small>Choose 1 minute to 30 days (43200 minutes). Each link registers one passkey.</small>
             <button type="submit">{{template "icon-link"}}Generate link and QR code</button>
@@ -118,12 +118,12 @@
 {{end}}
 
 {{define "auth-story"}}
-<section class="auth-story"><p class="eyebrow">Razzie Cloud Access Gateway</p><h2>{{if .Invite}}A new device.<br>The same you.{{else if .NeedsRegistration}}Your cloud.<br>Make it yours.{{else}}Your cloud,<br>one passkey away.{{end}}</h2><p>A simple, secure way to access the things you host.</p><div class="auth-art"><span>{{template "icon-shield"}}</span></div><p class="story-footer">{{template "icon-lock"}}Protected by the passkey on your device.</p></section>
+<section class="auth-story"><p class="eyebrow">Razzie Cloud Access Gateway</p><h2>{{if .Invite}}Your cloud.<br>Your own passkey.{{else if .NeedsRegistration}}Your cloud.<br>Make it yours.{{else}}Your cloud,<br>one passkey away.{{end}}</h2><p>A simple, secure way to access the things you host.</p><div class="auth-art"><span>{{template "icon-shield"}}</span></div><p class="story-footer">{{template "icon-lock"}}Protected by the passkey on your device.</p></section>
 {{end}}
 
 {{define "enrollment"}}
-<div class="auth-wrap">{{template "auth-story" .}}<section class="auth-form"><p class="eyebrow">Device enrollment</p><h1>Register this device</h1><p>Use your registration link to add a passkey to the account it was issued for.</p>
-<form data-webauthn="register" id="device-registration"><input type="hidden" name="linkToken" id="link-token"><label>Device name<input name="deviceName" maxlength="80" placeholder="e.g. Work laptop" autocomplete="off" required></label><button type="submit">{{template "icon-key"}}Create passkey on this device</button></form>
+<div class="auth-wrap">{{template "auth-story" .}}<section class="auth-form"><p class="eyebrow">Device enrollment</p><h1>Register this device</h1><p><span id="enrollment-description">Use your registration link to add a passkey to the account it was issued for.</span></p>
+<form data-webauthn="register" id="device-registration"><input type="hidden" name="linkToken" id="link-token"><label id="invitation-username" hidden>Choose your username<input name="username" maxlength="64" autocomplete="username" disabled required><small>Choose a unique username. You’ll use it to sign in.</small></label><label>Device name<input name="deviceName" maxlength="80" placeholder="e.g. Work laptop" autocomplete="off" required></label><button type="submit" disabled>{{template "icon-key"}}Create passkey on this device</button></form>
 <p class="auth-footnote">Each link works once. If it has expired or was already used, ask for a new one.<br><br>Already registered? <a href="/">Sign in →</a></p></section></div>
 {{end}}
 
@@ -151,7 +151,7 @@
 {{define "message"}}<p class="notice" role="{{if .Error}}alert{{else}}status{{end}}">{{if .Error}}{{.Error}}{{else}}{{.Message}}{{end}}</p>{{end}}
 
 {{define "link"}}
-<div class="registration-result"><hr><h3>Register a device for {{.User.Username}}</h3><label>Registration link<input readonly value="{{.Link}}" aria-label="Registration link"></label><p><a href="{{.Link}}">Open registration link</a></p><img class="qr" src="{{.QR}}" width="320" height="320" alt="QR code for the device registration link"><p><a href="{{.QR}}" download="device-registration.png">Download QR code</a></p><p>Expires {{.Expires}}. This link can be used once.</p><small>Anyone with this link can add a passkey to this account. Share it privately. Generate a separate link for each device.</small></div>
+<div class="registration-result"><hr><h3>{{if .NewUser}}Invite a new user{{else}}Register a device for {{.User.Username}}{{end}}</h3><label>Registration link<input readonly value="{{.Link}}" aria-label="Registration link"></label><p><a href="{{.Link}}">Open registration link</a></p><img class="qr" src="{{.QR}}" width="320" height="320" alt="QR code for the device registration link"><p><a href="{{.QR}}" download="device-registration.png">Download QR code</a></p><p>Expires {{.Expires}}. This link can be used once.</p><small>{{if .NewUser}}The recipient chooses a username and creates a regular user account with their first passkey.{{else}}Anyone with this link can add a passkey to this account.{{end}} Share it privately. Generate a separate link for each {{if .NewUser}}new user{{else}}device{{end}}.</small></div>
 {{end}}
 
 {{define "icon-grid"}}<svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>{{end}}

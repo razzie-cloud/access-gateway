@@ -26,6 +26,7 @@ type viewData struct {
 	Failure           *errorPage
 	NeedsRegistration bool
 	Invite            bool
+	NewUser           bool
 	User              *User
 	Users             []User
 	Error             string
@@ -224,6 +225,9 @@ func (s *Server) handleCreateLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	target := strings.TrimSpace(r.FormValue("username"))
+	// An explicit empty selection is the admin's new-user option. Omitting
+	// username keeps the existing self-enrollment API and regular-user form.
+	newUser := actor.IsAdmin && r.PostForm.Has("username") && target == ""
 	if target == "" {
 		target = actor.Username
 	}
@@ -231,10 +235,13 @@ func (s *Server) handleCreateLink(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, r, 403, "You can only register your own devices")
 		return
 	}
-	user, err := s.getUserByUsername(r.Context(), target)
-	if err != nil {
-		s.writeError(w, r, 404, "User not found")
-		return
+	var user User
+	if !newUser {
+		user, err = s.getUserByUsername(r.Context(), target)
+		if err != nil {
+			s.writeError(w, r, 404, "User not found")
+			return
+		}
 	}
 	token, err := randomToken()
 	if err != nil {
@@ -256,9 +263,9 @@ func (s *Server) handleCreateLink(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, r, 500, "Unable to save registration link")
 		return
 	}
-	logging.For(r.Context()).Info("Registration link issued", "event", "registration_link.issued", "actor_user_id", userID(actor.ID), "target_user_id", userID(user.ID), "expires_at", expires.UTC())
+	logging.For(r.Context()).Info("Registration link issued", "event", "registration_link.issued", "actor_user_id", userID(actor.ID), "target_user_id", userID(user.ID), "new_user", newUser, "expires_at", expires.UTC())
 	// QR bytes come from our encoder, never from user-supplied HTML or URLs.
-	s.render(w, r, 200, "link", viewData{User: &user, Link: link, QR: template.URL("data:image/png;base64," + base64.StdEncoding.EncodeToString(png)), Expires: expires.UTC().Format(time.RFC1123)})
+	s.render(w, r, 200, "link", viewData{User: &user, NewUser: newUser, Link: link, QR: template.URL("data:image/png;base64," + base64.StdEncoding.EncodeToString(png)), Expires: expires.UTC().Format(time.RFC1123)})
 }
 
 func (s *Server) handleUILogout(w http.ResponseWriter, r *http.Request) {

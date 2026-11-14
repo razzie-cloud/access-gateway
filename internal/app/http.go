@@ -43,6 +43,7 @@ func (s *Server) routes() {
 	handle("/ui/logout", s.handleUILogout)
 	handle("/api/bootstrap", s.handleBootstrap)
 	handle("/api/register/begin", s.handleRegisterBegin)
+	handle("/api/register/link", s.handleRegistrationLink)
 	handle("/api/register/finish", s.handleRegisterFinish)
 	handle("/api/login/begin", s.handleLoginBegin)
 	handle("/api/login/finish", s.handleLoginFinish)
@@ -87,6 +88,30 @@ type registerBeginReq struct {
 	DeviceName string `json:"deviceName"`
 }
 
+// Only the link type is exposed, never the existing account's identity. The
+// bearer token stays in a POST body, including on the initial page load.
+func (s *Server) handleRegistrationLink(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		s.methodNotAllowed(w, r, http.MethodPost)
+		return
+	}
+	var req struct {
+		LinkToken string `json:"linkToken"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		s.writeError(w, r, 400, "bad json")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+	registration, err := s.registrationFromLink(ctx, req.LinkToken)
+	if err != nil {
+		s.writeError(w, r, 403, "invalid, expired or used registration token")
+		return
+	}
+	writeJSON(w, 200, map[string]bool{"newUser": registration.NewUser})
+}
+
 func (s *Server) handleRegisterBegin(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		s.methodNotAllowed(w, r, http.MethodPost)
@@ -110,12 +135,36 @@ func (s *Server) handleRegisterBegin(w http.ResponseWriter, r *http.Request) {
 	var registration registrationContext
 	var err error
 	if req.LinkToken != "" {
-		// A link always determines the account; never accept a username override.
-		if req.Username != "" || req.Token != "" {
+		if req.Token != "" {
 			s.writeError(w, r, 400, "ambiguous registration")
 			return
 		}
 		registration, err = s.registrationFromLink(ctx, req.LinkToken)
+		if err == nil {
+			if registration.NewUser {
+				req.Username = strings.TrimSpace(req.Username)
+				if !validUsername(req.Username) {
+					s.writeError(w, r, 400, "username must contain 1–64 bytes")
+					return
+				}
+				_, lookupErr := s.getUserByUsername(ctx, req.Username)
+				if lookupErr == nil {
+					s.writeError(w, r, 409, "That username already exists; choose another")
+					return
+				}
+				if !errors.Is(lookupErr, sql.ErrNoRows) {
+					logging.Fail(r.Context(), slog.LevelError, "postgres", lookupErr)
+					s.writeError(w, r, 500, "db error")
+					return
+				}
+				id := uuid.New()
+				registration.User = User{ID: id[:], Username: req.Username}
+			} else if req.Username != "" {
+				// Existing-account links never accept a username override.
+				s.writeError(w, r, 400, "ambiguous registration")
+				return
+			}
+		}
 	} else {
 		req.Username = strings.TrimSpace(req.Username)
 		if !validUsername(req.Username) || req.Token == "" {
@@ -143,7 +192,7 @@ func (s *Server) handleRegisterBegin(w http.ResponseWriter, r *http.Request) {
 	registration.DeviceName = req.DeviceName
 	registration.DiscoverableRequired = true
 	waUser := WebAuthnUser{User: registration.User}
-	if registration.LinkHash != "" {
+	if registration.LinkHash != "" && !registration.NewUser {
 		waUser, err = s.loadWebAuthnUser(ctx, registration.User)
 		if err != nil {
 			logging.Fail(r.Context(), slog.LevelError, "postgres", err)
@@ -208,7 +257,7 @@ func (s *Server) handleRegisterFinish(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 	waUser := WebAuthnUser{User: registration.User}
-	if registration.LinkHash != "" {
+	if registration.LinkHash != "" && !registration.NewUser {
 		waUser, err = s.loadWebAuthnUser(ctx, registration.User)
 		if err != nil {
 			logging.Fail(r.Context(), slog.LevelError, "postgres", err)
@@ -230,7 +279,9 @@ func (s *Server) handleRegisterFinish(w http.ResponseWriter, r *http.Request) {
 	discoverable := true
 	credential.Extensions.RK = &discoverable
 	if err := s.completeRegistration(ctx, registration, credential); err != nil {
-		if errors.Is(err, errRegistrationUnavailable) {
+		if errors.Is(err, errUsernameTaken) {
+			s.writeError(w, r, 409, "That username already exists; choose another and start registration again")
+		} else if errors.Is(err, errRegistrationUnavailable) {
 			s.writeError(w, r, 409, "registration link expired, used, or bootstrap already completed")
 		} else {
 			logging.Fail(r.Context(), slog.LevelError, "postgres", err)

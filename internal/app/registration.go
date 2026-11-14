@@ -12,14 +12,17 @@ import (
 	"time"
 
 	"github.com/go-webauthn/webauthn/webauthn"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/razzie-cloud/access-gateway/internal/logging"
 )
 
 var errRegistrationUnavailable = errors.New("registration unavailable")
+var errUsernameTaken = errors.New("username already exists")
 
 // Only hashes are retained in server-side registration sessions and PostgreSQL.
 type registrationContext struct {
 	User                 User
+	NewUser              bool
 	LinkHash             string
 	BootstrapHash        string
 	DeviceName           string
@@ -52,10 +55,11 @@ func linkLifetime(minutes int) (time.Duration, error) {
 
 func (s *Server) registrationFromLink(ctx context.Context, token string) (registrationContext, error) {
 	registration := registrationContext{LinkHash: hashToken(token)}
-	err := s.db.QueryRowContext(ctx, `SELECT u.id,u.username,u.is_admin,u.created_at
- FROM registration_links l JOIN users u ON u.id=l.user_id
+	err := s.db.QueryRowContext(ctx, `SELECT l.user_id,COALESCE(u.username,''),COALESCE(u.is_admin,FALSE),COALESCE(u.created_at,0)
+ FROM registration_links l LEFT JOIN users u ON u.id=l.user_id
  WHERE l.token_hash=$1 AND l.used_at IS NULL AND l.expires_at>$2`, registration.LinkHash, time.Now().Unix()).Scan(
 		&registration.User.ID, &registration.User.Username, &registration.User.IsAdmin, &registration.User.CreatedAt)
+	registration.NewUser = registration.User.ID == nil
 	return registration, err
 }
 
@@ -78,10 +82,24 @@ func (s *Server) completeRegistration(ctx context.Context, registration registra
 		if err != nil {
 			return err
 		}
-		if used.Valid || expires <= time.Now().Unix() || !equalID(userID, registration.User.ID) {
+		if used.Valid || expires <= time.Now().Unix() || (registration.NewUser && userID != nil) || (!registration.NewUser && !equalID(userID, registration.User.ID)) {
 			return errRegistrationUnavailable
 		}
-		if _, err = tx.ExecContext(ctx, `UPDATE registration_links SET used_at=$2 WHERE token_hash=$1`, registration.LinkHash, time.Now().Unix()); err != nil {
+		if registration.NewUser {
+			if !validUsername(registration.User.Username) || len(registration.User.ID) != 16 {
+				return errRegistrationUnavailable
+			}
+			// Never attach a new-user invitation to an existing username. The
+			// unique constraint also protects names claimed by concurrent finishes.
+			if _, err = tx.ExecContext(ctx, `INSERT INTO users(id,username,is_admin,created_at) VALUES($1,$2,FALSE,$3)`, registration.User.ID, registration.User.Username, time.Now().Unix()); err != nil {
+				var pgErr *pgconn.PgError
+				if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "users_username_key" {
+					return errUsernameTaken
+				}
+				return err
+			}
+		}
+		if _, err = tx.ExecContext(ctx, `UPDATE registration_links SET used_at=$2,user_id=$3 WHERE token_hash=$1`, registration.LinkHash, time.Now().Unix(), registration.User.ID); err != nil {
 			return err
 		}
 	} else {
@@ -130,7 +148,9 @@ func (s *Server) completeRegistration(ctx context.Context, registration registra
 		return err
 	}
 	kind := "link"
-	if registration.LinkHash == "" {
+	if registration.NewUser {
+		kind = "invitation"
+	} else if registration.LinkHash == "" {
 		kind = "bootstrap"
 	}
 	logging.For(ctx).Info("Device enrolled", "event", "registration.completed", "user_id", userID(registration.User.ID), "device_id", deviceID, "enrollment_type", kind)

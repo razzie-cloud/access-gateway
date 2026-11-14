@@ -88,6 +88,7 @@ func TestFrontendStateTransitions(t *testing.T) {
 			assert.Equal(t, tc.account, strings.Contains(html, `hx-post="/ui/logout"`))
 			assert.Equal(t, tc.admin, strings.Contains(html, `hx-post="/ui/users"`))
 			assert.Equal(t, tc.admin, strings.Contains(html, `href="#users"`))
+			assert.Equal(t, tc.admin, strings.Contains(html, `&lt;new&gt; — recipient chooses username`))
 			assert.NotContains(t, html, "<member>")
 			assert.NotContains(t, html, "<admin>")
 			assert.NotContains(t, html, `style=`)
@@ -95,6 +96,8 @@ func TestFrontendStateTransitions(t *testing.T) {
 			if tc.invite {
 				assert.Contains(t, html, `id="device-registration"`)
 				assert.Contains(t, html, `name="linkToken"`)
+				assert.Contains(t, html, `id="invitation-username" hidden`)
+				assert.Contains(t, html, `autocomplete="username" disabled required`)
 			}
 			if !tc.invite {
 				page.Reset()

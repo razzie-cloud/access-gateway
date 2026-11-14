@@ -82,10 +82,26 @@ The complete link is shown only when generated; create another if you lose it.
 
 ## Add a user
 
-As administrator, use **Create a user**, then choose that account under
-**Device registration links**. Generate and privately send its link or QR code.
-The recipient registers their first passkey and can then sign in and onboard
-their own devices. New accounts are regular users, without admin permissions.
+As administrator, select **<new> — recipient chooses username** in the Account
+list under **Device registration links**. Generate and privately send its link
+or QR code. The recipient chooses a unique username (1–64 bytes), names their
+device and creates their first passkey. New accounts are regular users, without
+admin permissions. The account, passkey and invitation consumption commit
+atomically; canceled or failed enrollment creates no account and leaves the
+invitation usable until its expiry. If a name is taken, choose another and retry.
+
+You can still use **Create a user** to pick a username yourself, then select that
+account when generating a device link. Existing-account links never allow the
+recipient to change the target username. After registering, users can sign in
+and onboard their own devices.
+
+For HTTP clients, admin `POST /ui/links` with an explicitly empty `username`
+creates a new-user invitation. Omitting `username` targets the caller, as before;
+regular users can only issue links for themselves. `POST /api/register/link`
+accepts JSON `linkToken` and returns only `newUser` for a valid, unused link.
+`POST /api/register/begin` accepts `username` with `linkToken` only for a new-user
+invitation. Username availability is checked before the passkey prompt and again
+at commit. Tokens stay in URL fragments and JSON POST bodies, never URL queries.
 
 ## Manage devices and sessions
 
