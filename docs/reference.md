@@ -108,6 +108,11 @@ at commit. Tokens stay in URL fragments and JSON POST bodies, never URL queries.
 The desktop interface places activity beside device enrollment and user creation.
 Use the sidebar to jump to devices, sessions, users (administrators only), or
 registration links. On small screens the navigation wraps and panels stack.
+Devices, sessions and administrator-only users each have a Refresh control.
+Refreshing replaces only that panel, preserving edits in other panels and any
+generated registration link. Refresh failures appear inside the panel without
+removing its controls. Device/session mutations refresh the whole activity group
+so related state stays consistent.
 The interface follows the browser's light/dark preference without storing a
 theme setting. The header uses the same centered width limit as the main layout.
 Following an anchor to an account panel briefly highlights its outline, including

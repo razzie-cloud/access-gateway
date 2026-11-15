@@ -127,6 +127,22 @@ document.addEventListener("htmx:beforeSwap", (event) => {
 document.addEventListener("htmx:responseError", () => status("The request failed. Please try again."));
 document.addEventListener("htmx:sendError", () => status("Unable to reach the gateway. Please try again."));
 
+// Replacing a panel removes its focused Refresh button. Restore keyboard focus
+// without moving the page or taking focus back after the user moves elsewhere.
+const refreshFocus = new WeakSet();
+document.addEventListener("htmx:beforeRequest", event => {
+  const source = event.detail.elt;
+  if (source.matches("[data-activity-refresh]") && document.activeElement === source) {
+    refreshFocus.add(event.detail.xhr);
+  }
+});
+document.addEventListener("htmx:afterSettle", event => {
+  if (!refreshFocus.has(event.detail.xhr)) return;
+  refreshFocus.delete(event.detail.xhr);
+  if (document.activeElement === document.body) {
+    document.getElementById(event.detail.requestConfig.elt.id)?.focus({ preventScroll: true });
+  }
+});
 
 // Orient navigation within long pages and after server-rendered HTMX updates.
 (() => {

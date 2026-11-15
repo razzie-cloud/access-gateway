@@ -88,6 +88,14 @@ func (s *Server) activity(r *http.Request, actor User) (viewData, error) {
 }
 
 func (s *Server) renderActivity(w http.ResponseWriter, r *http.Request, actor User, message string) {
+	name := "activity"
+	if panel := activityRefreshPanel(r); panel != "" {
+		if panel == "users" && !actor.IsAdmin {
+			s.writeError(w, r, http.StatusForbidden, "Administrator access required")
+			return
+		}
+		name += "-" + panel
+	}
 	data, err := s.activity(r, actor)
 	if err != nil {
 		status := http.StatusInternalServerError
@@ -95,11 +103,23 @@ func (s *Server) renderActivity(w http.ResponseWriter, r *http.Request, actor Us
 			status = http.StatusServiceUnavailable
 		}
 		logging.Fail(r.Context(), slog.LevelError, "load_activity", err)
-		s.writeError(w, r, status, "Unable to load devices and sessions. Try refreshing the panel.")
+		s.writeError(w, r, status, "Unable to load account activity. Try refreshing the panel.")
 		return
 	}
 	data.Message = message
-	s.render(w, r, 200, "activity", data)
+	s.render(w, r, 200, name, data)
+}
+
+// Mutations refresh the complete activity group so related device/session state
+// stays consistent. A manual refresh replaces only the requested activity panel.
+func activityRefreshPanel(r *http.Request) string {
+	if r.Method == http.MethodGet && r.Header.Get("HX-Request") == "true" && (r.URL.Path == "/ui/activity" || r.URL.Path == "/ui/admin") {
+		switch panel := r.Header.Get("HX-Target"); panel {
+		case "devices", "sessions", "users":
+			return panel
+		}
+	}
+	return ""
 }
 
 func (s *Server) handleRenameDevice(w http.ResponseWriter, r *http.Request) {

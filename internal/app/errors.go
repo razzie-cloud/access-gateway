@@ -164,6 +164,10 @@ func (s *Server) writeError(w http.ResponseWriter, r *http.Request, status int, 
 	if r.Header.Get("HX-Request") == "true" && strings.HasPrefix(r.URL.Path, "/ui/") {
 		// Keep the live shell, drafts and form target when HTMX requests a fragment.
 		name = "message"
+		if panel := activityRefreshPanel(r); panel != "" {
+			w.Header().Set("HX-Retarget", "#"+panel+"-feedback")
+			w.Header().Set("HX-Reswap", "innerHTML")
+		}
 	} else {
 		// The proxy may display this page on any protected app's origin. Only the
 		// configured gateway may supply assets; the error page needs no scripts.

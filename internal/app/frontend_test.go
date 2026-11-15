@@ -136,3 +136,45 @@ func TestFrontendProtectedActivityActions(t *testing.T) {
 	assert.Contains(t, html, `hx-post="/ui/devices/rename"`)
 	assert.NotContains(t, html, `id="users"`)
 }
+
+func TestFrontendActivityRefreshPanels(t *testing.T) {
+	for _, admin := range []bool{false, true} {
+		data := viewData{User: &User{Username: "alice", IsAdmin: admin}}
+		var activity bytes.Buffer
+		require.NoError(t, templates.ExecuteTemplate(&activity, "activity", data))
+		for _, panel := range []string{"devices", "sessions", "users"} {
+			var fragment bytes.Buffer
+			require.NoError(t, templates.ExecuteTemplate(&fragment, "activity-"+panel, data))
+			if panel == "users" && !admin {
+				assert.Empty(t, strings.TrimSpace(fragment.String()))
+				assert.NotContains(t, activity.String(), `id="refresh-users"`)
+				continue
+			}
+			assert.Contains(t, activity.String(), fragment.String())
+			assert.Equal(t, 1, strings.Count(fragment.String(), `data-navigation-target`))
+			button := regexp.MustCompile(`<button[^>]+id="refresh-` + panel + `"[^>]*>`).FindString(fragment.String())
+			require.NotEmpty(t, button)
+			assert.Contains(t, button, `hx-get="/ui/activity"`)
+			assert.Contains(t, button, `hx-target="#`+panel+`"`)
+			assert.Contains(t, button, `hx-swap="outerHTML"`)
+			assert.Contains(t, button, `hx-disabled-elt="this"`)
+			assert.Contains(t, fragment.String(), `id="`+panel+`-feedback" aria-live="polite"`)
+		}
+	}
+}
+
+func TestActivityRefreshErrorsKeepPanel(t *testing.T) {
+	s := unitServer()
+	for _, panel := range []string{"devices", "sessions", "users"} {
+		r := httptest.NewRequest(http.MethodGet, "/ui/activity", nil)
+		r.Header.Set("HX-Request", "true")
+		r.Header.Set("HX-Target", panel)
+		w := httptest.NewRecorder()
+		s.handler().ServeHTTP(w, r)
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+		assert.Equal(t, "#"+panel+"-feedback", w.Header().Get("HX-Retarget"))
+		assert.Equal(t, "innerHTML", w.Header().Get("HX-Reswap"))
+		assert.Contains(t, w.Body.String(), `role="alert"`)
+		assert.NotContains(t, w.Body.String(), "<!doctype")
+	}
+}

@@ -3,6 +3,7 @@ package app
 import (
 	"database/sql"
 	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
@@ -167,6 +168,31 @@ func TestPostgresActivityOwnershipAndRemoval(t *testing.T) {
 	assert.Equal(t, 200, request(s, "POST", "/ui/devices/rename", body, "admin-session").Code)
 	assert.Equal(t, 200, request(s, "POST", "/ui/sessions/remove", sessionForm("Gateway", "bob-session"), "admin-session").Code)
 	assert.Equal(t, 200, request(s, "POST", "/ui/devices/remove", fmt.Sprint("device_id=", bobDevice), "admin-session").Code)
+}
+
+func TestPostgresActivityPanelRefresh(t *testing.T) {
+	s := postgresServer(t)
+	addUser(t, s, "admin", true)
+	addUser(t, s, "member", false)
+	for _, token := range []string{"admin-session", "member-session"} {
+		for _, panel := range []string{"devices", "sessions", "users"} {
+			r := httptest.NewRequest(http.MethodGet, "/ui/activity", nil)
+			r.AddCookie(&http.Cookie{Name: "auth", Value: token})
+			r.Header.Set("HX-Request", "true")
+			r.Header.Set("HX-Target", panel)
+			w := httptest.NewRecorder()
+			s.handler().ServeHTTP(w, r)
+			if token == "member-session" && panel == "users" {
+				assert.Equal(t, http.StatusForbidden, w.Code)
+				assert.NotContains(t, w.Body.String(), `id="users"`)
+				continue
+			}
+			require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+			assert.Equal(t, 1, strings.Count(w.Body.String(), `data-navigation-target`))
+			assert.Contains(t, w.Body.String(), `id="`+panel+`"`)
+			assert.Equal(t, "no-store", w.Header().Get("Cache-Control"))
+		}
+	}
 }
 
 func TestPostgresLegacySessionsProtectDevices(t *testing.T) {
