@@ -21,6 +21,7 @@ import (
 var templates = template.Must(template.ParseFS(web.Assets, "templates.html"))
 
 type viewData struct {
+	HeaderFragment    bool
 	LandingOrigin     string
 	GatewayOrigin     string
 	Failure           *errorPage
@@ -45,6 +46,8 @@ type adminUser struct {
 }
 
 func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name string, data viewData) {
+	data.GatewayOrigin = strings.TrimRight(s.cfg.Origin, "/")
+	data.HeaderFragment = name == "state"
 	if data.LandingOrigin == "" {
 		data.LandingOrigin = "https://razzie.cloud"
 	}

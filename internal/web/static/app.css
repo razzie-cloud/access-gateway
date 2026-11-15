@@ -391,3 +391,20 @@ nav[aria-label="breadcrumb"] li:last-child a { color: var(--pico-color); }
 :root:not([data-theme="light"]) .error-card { box-shadow: 0 16px 45px #00000030; }
 :root:not([data-theme="light"]) .error-status { background: #3b3224; color: #e9c57e; }
 }
+
+/* Reviewed account overview: one identity in the header, sign-out in navigation. */
+.sidebar section { margin: 0; }
+.sidebar-signout { border-top: 1px solid var(--pico-muted-border-color); padding: 1.2rem .35rem 0; }
+.sidebar-signout form { margin: 0; }
+.sidebar-signout button { width: 100%; }
+.sidebar-signout small { display: block; font-size: .7rem; margin: .6rem .35rem 0; }
+.content-columns { gap: 1.4rem; }
+.stack { align-content: start; }
+.aside-title .eyebrow { margin-bottom: .65rem; }
+.aside-title h2 { margin-top: 0; }
+@media(max-width:760px) {
+ .sidebar-signout { display: flex; align-items: center; gap: .8rem; padding: .7rem 0 .2rem; margin-top: .5rem; }
+ .sidebar-signout button { width: auto; font-size: .77rem; padding: .4rem .65rem; }
+ .sidebar-signout small { margin: 0; }
+ #devices>.section-heading { flex-wrap: wrap; }
+}

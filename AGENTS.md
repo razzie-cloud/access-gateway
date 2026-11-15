@@ -36,6 +36,12 @@ These use fake API/authenticator responses and do not replace live acceptance.
 
 ## Frontend requirements
 
+Signed-in headers use the shared `static/account-header.css`: shield, username
+linked to configured public ORIGIN, and an inline Administrator badge only for
+admins. Keep the Files/Notes CSS copies identical. Account-state responses own
+the header's HTMX out-of-band update; full pages render one header target.
+Sign out stays in the sidebar. See parent docs/brand/README.md's header contract.
+
 **All frontend work must use HTMX and PicoCSS.** Use server-rendered HTML
 fragments for account views and management forms. Do not introduce a SPA
 framework or a frontend build pipeline. The only custom JavaScript bridge is

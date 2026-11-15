@@ -9,6 +9,7 @@
   <link rel="icon" href="/static/razzie-cloud-logo.png">
   <link rel="stylesheet" href="/static/pico.min.css">
   <link rel="stylesheet" href="/static/app.css">
+  <link rel="stylesheet" href="/static/account-header.css">
   <script src="/static/htmx.min.js" defer></script>
   <script src="/static/app.js" defer></script>
 </head>
@@ -16,7 +17,7 @@
   <a class="skip-link" href="#main">Skip to content</a>
   <header class="topbar">
     <div class="brand-group"><a class="brand" href="{{.LandingOrigin}}/"><img class="brand-mark" src="/static/razzie-cloud-logo.png" width="46" height="46" alt=""><strong>Razzie Cloud</strong></a><a class="service-name" href="/">Access Gateway</a></div>
-    <span class="badge">{{template "icon-shield"}} Passkey access</span>
+    <div class="topbar-right" id="account-header">{{template "account-identity" .}}</div>
   </header>
   <main id="main">
     <p id="status" class="page-status" role="status" aria-live="polite"></p>
@@ -60,7 +61,10 @@
 </body>
 </html>{{end}}
 
+{{define "account-identity"}}{{if .User}}<div class="identity" aria-label="Signed-in account">{{template "icon-shield"}}<div class="identity-copy"><a class="account-link" href="{{.GatewayOrigin}}/" title="Manage your account"><strong title="{{.User.Username}}">{{.User.Username}}</strong></a>{{if .User.IsAdmin}}<span class="badge green">Administrator</span>{{end}}</div></div>{{else}}<span class="badge">{{template "icon-shield"}} Passkey access</span>{{end}}{{end}}
+
 {{define "state"}}
+{{if .HeaderFragment}}<div id="account-header" hx-swap-oob="innerHTML">{{template "account-identity" .}}</div>{{end}}
 {{if .User}}
 <div class="app-layout">
   <aside class="sidebar">
@@ -71,15 +75,14 @@
       {{if .User.IsAdmin}}<li><a href="#users">{{template "icon-users"}}Users</a></li>{{end}}
     </ul></nav></section>
     <section><p class="eyebrow">Device enrollment</p><nav aria-label="Enrollment"><ul><li><a href="#registration">{{template "icon-link"}}Registration links</a></li></ul></nav></section>
+    <div class="sidebar-signout"><form hx-post="/ui/logout" hx-target="#content" hx-disabled-elt="find button"><button class="secondary outline" type="submit">{{template "icon-logout"}}Sign out</button></form><small>Also signs out connected apps.</small></div>
     <div class="sidebar-note">{{template "icon-lock"}}<p>Protected with passkeys.<br>No passwords to remember.</p></div>
   </aside>
   <div class="workspace">
-    <div class="page-heading"><div><p class="eyebrow">Access Gateway</p><h1>Your cloud. Your keys.</h1><p class="muted">{{if .User.IsAdmin}}Manage the people and devices that have access.{{else}}Manage your devices and access to your cloud.{{end}}</p></div><a href="#registration" role="button">{{template "icon-plus"}}Register a device</a></div>
-    <article class="account-strip" id="account" data-navigation-target><span class="icon-tile">{{template "icon-shield"}}</span><div><p>Signed in as <strong>{{.User.Username}}</strong></p>{{if .User.IsAdmin}}<span class="badge green">Administrator</span>{{end}}</div><form class="account-actions" hx-post="/ui/logout" hx-target="#content"><button class="secondary outline" type="submit">{{template "icon-logout"}}Sign out</button></form></article>
+    <div class="page-heading" id="account" data-navigation-target><div><p class="eyebrow">Access Gateway</p><h1>Your cloud. Your keys.</h1><p class="muted">{{if .User.IsAdmin}}Manage the people and devices that have access.{{else}}Manage your devices and access to your cloud.{{end}}</p></div><a href="#registration" role="button">{{template "icon-plus"}}Register a device</a></div>
     {{if or .Message .Error}}{{template "message" .}}{{end}}
     <div class="content-columns">
       <section class="stack" aria-label="Account activity">
-        <div class="section-heading"><div><h2>{{if .User.IsAdmin}}Users, devices and sessions{{else}}Your devices and sessions{{end}}</h2><p class="muted">Times are shown in UTC.</p></div><button class="secondary outline" type="button" hx-get="/ui/activity" hx-target="#activity-data" hx-disabled-elt="this">{{template "icon-refresh"}}Refresh</button></div>
         <div id="activity-data" class="stack" hx-get="/ui/activity" hx-trigger="load" aria-live="polite"><p aria-busy="true">Loading devices and sessions…</p></div>
       </section>
       <div class="stack">
@@ -130,7 +133,7 @@
 {{define "activity"}}
 {{if .User}}
 {{if or .Message .Error}}{{template "message" .}}{{end}}
-<article class="table-card" id="devices" data-navigation-target><div class="section-heading"><div><h2>Devices ({{len .Devices}})</h2><p class="muted">The passkeys that open your cloud.</p></div></div>
+<article class="table-card" id="devices" data-navigation-target><div class="section-heading"><div><h2>Devices ({{len .Devices}})</h2><p class="muted">The passkeys that open your cloud.</p></div><button class="text-button" type="button" hx-get="/ui/activity" hx-target="#activity-data" hx-disabled-elt="this">{{template "icon-refresh"}}Refresh</button></div>
 {{range .Devices}}<div class="device-row">
   <span class="file-icon">{{template "icon-laptop"}}</span><div class="device-info"><p>{{.Name}}</p><small>{{if $.User.IsAdmin}}{{.Username}} · {{end}}Registered {{.CreatedAt.UTC.Format "2006-01-02 15:04:05"}} UTC</small></div>
   <span class="badge{{if .Current}} green{{end}}">{{if .Current}}This device{{else if .InUse}}In use{{else}}Not in use{{end}}</span>

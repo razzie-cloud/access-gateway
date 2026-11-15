@@ -13,6 +13,37 @@ Serve the **Razzie Cloud parent directory** with
 
 [Account screenshot](index-desktop.png) · [Sign-in screenshot](login-desktop.png)
 
+## Account identity and alignment proposal
+
+The updated overview shows Files' shield icon beside the signed-in username in
+the upper-right header. The **Administrator** badge sits on the same line as the
+username; omit the badge for regular users. The shield stays visible on mobile.
+The former full-width account strip is removed. One **Sign out** button sits below the sidebar navigation,
+with a note that connected applications are also signed out. On mobile, the
+username and role stay visible and the sign-out action follows the wrapped
+navigation. The sign-out link opens the sample sign-in page; it ends no session.
+
+Devices and enrollment now start on the same row. Panel gaps and enrollment
+headings use consistent spacing, the workspace fills its grid column, and the
+header shares the centered application frame. `index.css` applies this proposal
+only to the two overview fixtures. Production now implements the reviewed header,
+sidebar sign-out and panel alignment. The username opens the configured public
+gateway account page; these static fixtures link back to the sample overview.
+
+Review [light desktop](index-desktop.png), [dark desktop](dark/index-desktop.png),
+[light mobile](index-mobile.png), or [dark mobile](dark/index-mobile.png).
+Chromium checked both themes at 320, 390, 768, 1440 and 1920 pixels (10 layout
+cases), including identity visibility, desktop panel/frame alignment, headings,
+assets, overflow, keyboard focus, navigation, theme round trips and sign-out
+destinations. Refresh, rename, registration-link and user-creation fixtures passed;
+overview HTMX requests omit form values. No console/page/CSP errors, failed
+responses or external requests occurred. Desktop/mobile screenshots were visually
+reviewed. Static mockups only: no Go build, backend authentication or deployment.
+The shield/inline-badge revision repeated those checks, including the unbadged
+regular-user header and a long username using temporary browser-only variants.
+The saved fixtures show an administrator; regular-user content remains outside
+this screen set.
+
 ## Dark-mode screenshots
 
 Open [the dark preview](dark/index.html), or use **Dark mode** in any preview's
@@ -35,8 +66,10 @@ outside this initial screen set.
 
 Assets are referenced directly from `../../internal/web/static/`. `mockup.css`
 adds layout and Pico variable overrides. `fragments/` contains HTMX fixtures.
-Production templates now implement this layout and automatically follow the
-browser's light/dark preference. These mockup pages remain separate fixtures with
+Production templates implement the reviewed account identity/alignment layout
+and automatically follow the browser's light/dark preference. Files and Notes
+use the same shield, linked username and inline administrator-only badge.
+These mockup pages remain separate fixtures with
 simulated interactions; service forms use the live HTMX and WebAuthn flows.
 
 ## Administrator access denied

@@ -1,0 +1,48 @@
+/* Account overview proposal. Kept separate from the other mockup screens. */
+body { min-width: 0; }
+.topbar { max-width: 1680px; margin-inline: auto; }
+.workspace { max-width: none; }
+.brand,.brand-text,.topbar-right,.identity,.identity-copy { min-width: 0; }
+.brand-text { display: flex; align-items: center; }
+.topbar-right { max-width: 45%; }
+.identity { padding: 0; border: 0; }
+.identity>.icon { flex-shrink: 0; }
+.identity-copy { display: flex; align-items: center; gap: .6rem; }
+.identity-copy .account-link { display: block; min-width: 0; color: inherit; text-decoration: none; border-radius: .2rem; }
+.identity-copy .account-link:hover { text-decoration: underline; }
+.identity-copy strong { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .86rem; }
+.identity-copy .badge { flex-shrink: 0; font-size: .65rem; padding: .12rem .45rem; }
+.sidebar section { margin: 0; }
+.sidebar-signout { border-top: 1px solid var(--pico-muted-border-color); padding: 1.2rem .35rem 0; }
+.sidebar-signout a { width: 100%; }
+.sidebar-signout small { display: block; font-size: .7rem; margin: .6rem .35rem 0; }
+.content-columns { gap: 1.4rem; }
+.stack { min-width: 0; align-content: start; }
+.aside-title .eyebrow { margin-bottom: .65rem; font-size: .68rem; }
+.aside-title h2 { margin-top: 0; }
+.device-row p,.device-row small,code { overflow-wrap: anywhere; }
+.aside-card button { white-space: normal; }
+.overflow-auto { overflow-x: auto; }
+@media (min-width: 1600px) {
+  .topbar { border-inline: 1px solid var(--pico-muted-border-color); }
+}
+@media (max-width: 760px) {
+  .topbar { flex-wrap: nowrap; padding: .9rem 1rem; gap: .5rem; }
+  .brand { font-size: 1rem; gap: .5rem; }
+  .brand-mark { width: 34px; height: 34px; }
+  .brand-text { display: block; }
+  .service-name { display: block; border: 0; margin: .1rem 0 0; padding: 0; font-size: .68rem; white-space: nowrap; }
+  .identity-copy strong { font-size: .8rem; }
+  .identity-copy .badge { font-size: .6rem; }
+  .identity,.identity-copy { gap: .45rem; }
+  .topbar-right { max-width: 55%; }
+  .sidebar-signout { display: flex; align-items: center; gap: .8rem; padding: .7rem 0 .2rem; margin-top: .5rem; }
+  .sidebar-signout a { width: auto; font-size: .77rem; padding: .4rem .65rem; }
+  .sidebar-signout small { margin: 0; }
+  .section-heading { flex-wrap: wrap; }
+}
+@media (max-width: 480px) {
+  .brand { font-size: .9rem; gap: .4rem; }
+  .brand-mark { width: 30px; height: 30px; }
+  .identity>.icon { width: 18px; height: 18px; }
+}
