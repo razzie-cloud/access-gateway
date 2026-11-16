@@ -351,6 +351,9 @@ nav[aria-label="breadcrumb"] li:last-child a { color: var(--pico-color); }
 .management-controls button { width: auto; }
 .registration-result { margin-top: 1.2rem; overflow-wrap: anywhere; }
 .registration-result h3 { font-size: 1rem; }
+.registration-link-group input { min-width: 0; }
+.registration-link-group button { flex: 0 0 2.8rem; padding: .6rem; }
+.registration-result [data-copy-feedback]:not(:empty) { display: block; margin-bottom: 1rem; }
 .registration-result p,.registration-result small { font-size: .8rem; }
 .qr { display: block; width: 100%; max-width: 320px; height: auto; background: white; border: .6rem solid white; border-radius: .5rem; margin-bottom: 1rem; }
 #activity-data { scroll-margin-top: 1rem; }

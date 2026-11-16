@@ -5,6 +5,23 @@ const status = (message) => { document.getElementById("status").textContent = me
 const decode = (value) => Uint8Array.from(atob(value.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(value.length / 4) * 4, "=")), c => c.charCodeAt(0)).buffer;
 const encode = (buffer) => btoa(String.fromCharCode(...new Uint8Array(buffer))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 
+// Delegation also covers registration links inserted or replaced by HTMX.
+document.addEventListener("click", async event => {
+  const button = event.target.closest("[data-copy-registration-link]");
+  if (!button) return;
+  const result = button.closest(".registration-result");
+  const input = result.querySelector("#registration-link");
+  const feedback = result.querySelector("[data-copy-feedback]");
+  try {
+    await navigator.clipboard.writeText(input.value);
+    feedback.textContent = "Registration link copied.";
+  } catch {
+    input.focus();
+    input.select();
+    feedback.textContent = "Unable to copy automatically. Copy the selected link manually.";
+  }
+});
+
 async function api(path, body) {
   const response = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json", "Accept": "application/json" }, body: JSON.stringify(body) });
   const data = await response.json();
