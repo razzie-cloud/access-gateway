@@ -44,6 +44,12 @@ regular-user header and a long username using temporary browser-only variants.
 The saved fixtures show an administrator; regular-user content remains outside
 this screen set.
 
+Registration links now use Files' symmetric three-node Share icon in production
+and both overview previews. The four overview screenshots were refreshed and
+visually checked with Firefox at desktop and mobile widths in both themes.
+Gateway build, vet and unit tests passed; PostgreSQL/Redis integration tests
+skipped because their test backend variables were unset.
+
 ## Dark-mode screenshots
 
 Open [the dark preview](dark/index.html), or use **Dark mode** in any preview's
