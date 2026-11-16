@@ -52,6 +52,8 @@ type loginCredentialGroup struct {
 // avoids exposing per-account credential counts, lengths or transports. Only
 // the requested account's real IDs leave the server; other IDs are decoys.
 func (s *Server) loginCredentials(ctx context.Context, username string) ([]protocol.CredentialDescriptor, WebAuthnUser, error) {
+	// Real and dummy accounts must produce identical decoys for case variants.
+	username = canonicalUsername(username)
 	rows, err := s.db.QueryContext(ctx, `WITH counts AS (
  SELECT octet_length(credential_id) AS length, count(*) AS slots
  FROM webauthn_credentials GROUP BY user_id,octet_length(credential_id)
@@ -59,7 +61,7 @@ func (s *Server) loginCredentials(ctx context.Context, username string) ([]proto
  SELECT length,max(slots) AS slots FROM counts GROUP BY length
 ), selected AS (
  SELECT c.user_id,c.credential_id FROM webauthn_credentials c JOIN users u ON u.id=c.user_id
- WHERE u.username=$1
+ WHERE lower(u.username COLLATE "C")=$1
 )
 SELECT p.length,p.slots,s.user_id,s.credential_id FROM profile p
 LEFT JOIN selected s ON octet_length(s.credential_id)=p.length

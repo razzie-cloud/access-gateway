@@ -45,7 +45,7 @@ func (m memorySessionStore) DeleteSID(_ context.Context, t string) error {
 	return nil
 }
 func (m memorySessionStore) CompleteLogin(_ context.Context, sid, token, name string, deviceID int64) (bool, error) {
-	if n, _, ok := m.mem.GetLogin(sid); !ok || (n != "" && n != name) {
+	if n, _, ok := m.mem.GetLogin(sid); !ok || (n != "" && canonicalUsername(n) != canonicalUsername(name)) {
 		return false, nil
 	}
 	m.mem.PutAuth(token, name)

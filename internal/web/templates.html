@@ -95,7 +95,7 @@
           </form><div id="link-result" aria-live="polite"></div>
         </article>
         {{if .User.IsAdmin}}<article class="aside-card"><div class="aside-title"><p class="eyebrow">Administration</p><h2>Create a user</h2><p class="muted">New users can sign in after registering their first device through a link you generate for them.</p></div>
-          <form hx-post="/ui/users" hx-target="#user-result" hx-disabled-elt="find button"><label>Username<input name="username" maxlength="64" autocomplete="off" required></label><button class="secondary outline" type="submit">{{template "icon-plus"}}Create user</button></form><div id="user-result" aria-live="polite"></div>
+          <form hx-post="/ui/users" hx-target="#user-result" hx-disabled-elt="find button"><label>Username<input name="username" maxlength="64" pattern="[A-Za-z0-9_.\-]{1,64}" title="Use 1–64 letters (A–Z, a–z), digits, underscores, hyphens or periods." autocapitalize="none" spellcheck="false" autocomplete="off" required>{{template "username-rules"}}</label><button class="secondary outline" type="submit">{{template "icon-plus"}}Create user</button></form><div id="user-result" aria-live="polite"></div>
         </article>{{end}}
       </div>
     </div>
@@ -108,10 +108,10 @@
   <section class="auth-form">
     {{if .NeedsRegistration}}
       <p class="eyebrow">Start here</p><h1>Set up your administrator</h1><p>Enter the bootstrap token from the gateway logs and create your first passkey.</p>
-      <form data-webauthn="register"><label>Username<input name="username" maxlength="64" autocomplete="username" required></label><label>Bootstrap token<input name="token" type="password" autocomplete="off" required></label><label>Device name<input name="deviceName" maxlength="80" placeholder="e.g. Personal laptop" autocomplete="off" required></label><button type="submit">{{template "icon-key"}}Create administrator passkey</button></form>
+      <form data-webauthn="register"><label>Username<input name="username" maxlength="64" pattern="[A-Za-z0-9_.\-]{1,64}" title="Use 1–64 letters (A–Z, a–z), digits, underscores, hyphens or periods." autocapitalize="none" spellcheck="false" autocomplete="username" required>{{template "username-rules"}}</label><label>Bootstrap token<input name="token" type="password" autocomplete="off" required></label><label>Device name<input name="deviceName" maxlength="80" placeholder="e.g. Personal laptop" autocomplete="off" required></label><button type="submit">{{template "icon-key"}}Create administrator passkey</button></form>
     {{else}}
       <p class="eyebrow">Welcome back</p><h1>Sign in</h1><p>Enter your username to use a passkey saved to your device.</p>
-      <form data-webauthn="login"><label>Username<input name="username" maxlength="64" autocomplete="username" required></label><button type="submit">{{template "icon-key"}}Sign in with a passkey</button></form>
+      <form data-webauthn="login"><label>Username<input name="username" maxlength="64" pattern="[A-Za-z0-9_.\-]{1,64}" title="Use 1–64 letters (A–Z, a–z), digits, underscores, hyphens or periods." autocapitalize="none" spellcheck="false" autocomplete="username" required>{{template "username-rules"}}</label><button type="submit">{{template "icon-key"}}Sign in with a passkey</button></form>
       <p class="auth-footnote"><strong>Using a new device?</strong><br>Open the registration link you received, or sign in on an existing device to generate one.</p>
     {{end}}
     {{if or .Message .Error}}{{template "message" .}}{{end}}
@@ -126,7 +126,7 @@
 
 {{define "enrollment"}}
 <div class="auth-wrap">{{template "auth-story" .}}<section class="auth-form"><p class="eyebrow">Device enrollment</p><h1>Register this device</h1><p><span id="enrollment-description">Use your registration link to add a passkey to the account it was issued for.</span></p>
-<form data-webauthn="register" id="device-registration"><input type="hidden" name="linkToken" id="link-token"><label id="invitation-username" hidden>Choose your username<input name="username" maxlength="64" autocomplete="username" disabled required><small>Choose a unique username. You’ll use it to sign in.</small></label><label>Device name<input name="deviceName" maxlength="80" placeholder="e.g. Work laptop" autocomplete="off" required></label><button type="submit" disabled>{{template "icon-key"}}Create passkey on this device</button></form>
+<form data-webauthn="register" id="device-registration"><input type="hidden" name="linkToken" id="link-token"><label id="invitation-username" hidden>Choose your username<input name="username" maxlength="64" pattern="[A-Za-z0-9_.\-]{1,64}" title="Use 1–64 letters (A–Z, a–z), digits, underscores, hyphens or periods." autocapitalize="none" spellcheck="false" autocomplete="username" disabled required>{{template "username-rules"}}</label><label>Device name<input name="deviceName" maxlength="80" placeholder="e.g. Work laptop" autocomplete="off" required></label><button type="submit" disabled>{{template "icon-key"}}Create passkey on this device</button></form>
 <p class="auth-footnote">Each link works once. If it has expired or was already used, ask for a new one.<br><br>Already registered? <a href="/">Sign in →</a></p></section></div>
 {{end}}
 
@@ -185,3 +185,5 @@
 {{define "icon-settings"}}<svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></svg>{{end}}
 
 {{define "icon-alert"}}<svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v6m0 4h.01"/></svg>{{end}}
+
+{{define "username-rules"}}<small>1–64 letters (A–Z, a–z), digits, _, - or . Capitalization is ignored.</small>{{end}}

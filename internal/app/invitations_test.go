@@ -41,11 +41,11 @@ func TestPostgresNewUserInvitation(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 	assert.JSONEq(t, `{"newUser":true}`, w.Body.String())
 	assert.Equal(t, "no-store", w.Header().Get("Cache-Control"))
-	for _, name := range []string{"", "  ", strings.Repeat("a", 65), strings.Repeat("é", 33), "admin"} {
+	for _, name := range []string{"", "  ", strings.Repeat("a", 65), strings.Repeat("é", 33), "alice@home", "alice bob", "admin", "ADMIN"} {
 		body, err := json.Marshal(registerBeginReq{LinkToken: token, Username: name})
 		require.NoError(t, err)
 		w = request(s, "POST", "/api/register/begin", string(body), "")
-		if name == "admin" {
+		if strings.EqualFold(name, "admin") {
 			assert.Equal(t, http.StatusConflict, w.Code)
 		} else {
 			assert.Equal(t, http.StatusBadRequest, w.Code)
@@ -106,7 +106,7 @@ func TestPostgresInvitationRollbackAndExpiry(t *testing.T) {
 	assert.True(t, link.NewUser, "failed credential insert must leave the invitation unbound")
 	// A name taken after begin must neither consume the invitation nor add a
 	// credential to the existing account. A fresh begin can choose another name.
-	addUser(t, s, "recipient", false)
+	addUser(t, s, "Recipient", false)
 	assert.ErrorIs(t, s.completeRegistration(t.Context(), registration, &webauthn.Credential{ID: []byte("another-key")}), errUsernameTaken)
 	registration = beginInvitation(t, s, token, "another-recipient")
 	_, err = s.db.Exec(`UPDATE registration_links SET expires_at=$1 WHERE token_hash=$2`, time.Now().Unix()-1, hashToken(token))
@@ -128,7 +128,7 @@ func TestPostgresCompetingInvitations(t *testing.T) {
 			name := "other-recipient"
 			if !sameLink {
 				token = issueLink(t, s, "admin", "", 60)
-				name = "recipient"
+				name = "RECIPIENT"
 			}
 			second := beginInvitation(t, s, token, name)
 			var wg sync.WaitGroup

@@ -76,7 +76,11 @@ func (s *Server) validateBootstrapToken(ctx context.Context, token string) error
 
 func (s *Server) getUserByUsername(ctx context.Context, username string) (User, error) {
 	var u User
-	err := s.repo.Find(ctx, &u, rel.Where(where.Eq("username", username)))
+	if !validUsername(username) {
+		return u, sql.ErrNoRows
+	}
+	err := s.db.QueryRowContext(ctx, `SELECT id,username,is_admin,created_at FROM users
+ WHERE lower(username COLLATE "C")=$1`, canonicalUsername(username)).Scan(&u.ID, &u.Username, &u.IsAdmin, &u.CreatedAt)
 	return u, err
 }
 

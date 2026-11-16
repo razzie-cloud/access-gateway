@@ -28,7 +28,7 @@ func TestPostgresAdminPanel(t *testing.T) {
 	member := addUser(t, s, "member", false)
 	// Accounts without a passkey or session must still appear.
 	id := uuid.New()
-	_, err := s.db.Exec(`INSERT INTO users(id,username,is_admin,created_at) VALUES($1,$2,FALSE,0)`, id[:], "<pending>")
+	_, err := s.db.Exec(`INSERT INTO users(id,username,is_admin,created_at) VALUES($1,$2,FALSE,0)`, id[:], "Pending.User")
 	require.NoError(t, err)
 	appToken := mintRedisAppSession(t, s.sessions.(*redisSessions), "member-session")
 	for _, token := range []string{"", "unknown", "member-session"} {
@@ -55,7 +55,7 @@ func TestPostgresAdminPanel(t *testing.T) {
 		assert.Contains(t, w.Body.String(), uid.String())
 	}
 	assert.Contains(t, w.Body.String(), id.String())
-	assert.Contains(t, w.Body.String(), "&lt;pending&gt;")
+	assert.Contains(t, w.Body.String(), "Pending.User")
 	assert.Contains(t, w.Body.String(), "Users (3)")
 	assert.Contains(t, w.Body.String(), "Active sessions (3)")
 	assert.Contains(t, w.Body.String(), testAppOrigin)

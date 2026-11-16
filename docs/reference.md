@@ -46,6 +46,16 @@ Registration itself does not issue an authenticated session: a separate signed
 WebAuthn assertion must succeed through the normal login endpoints.
 Multiple devices can have separate passkeys.
 
+Usernames contain 1–64 ASCII characters: `A–Z`, `a–z`, `0–9`, `_`, `-` and `.`.
+Leading and trailing whitespace is trimmed on submission. Matching and uniqueness
+are case-insensitive: `Alice`, `alice` and `ALICE` identify the same account.
+The chosen capitalization is preserved for display and signed identity headers.
+Go validates submissions; PostgreSQL enforces the character rules and a unique
+index on `lower(username COLLATE "C")`, without a `citext` extension.
+The migration refuses incompatible existing names or case-only duplicates and
+rolls back without renaming or merging accounts; resolve conflicts explicitly
+before retrying the upgrade.
+
 Login asks for a username and filters the browser's passkey choices to credentials
 registered to that account. The ceremony binds the username, account UUID and
 credential IDs; a different account's passkey cannot complete it. Named login
@@ -64,8 +74,10 @@ can provide clues. See the [WebAuthn privacy considerations](https://www.w3.org/
 
 Each valid username submission logs `login.attempted` with the client IP and a
 bounded, quoted `claimed_username`, even if the browser prompt is canceled or
-the account does not exist. Failed verification emits `login.rejected` with the same claimed name and
-a reason, while clients always receive the same 401 message. A claimed username
+the account does not exist. New login ceremonies and their deterministic decoys
+use lowercase usernames for both real and dummy accounts. Failed verification
+emits `login.rejected` with the ceremony's claimed name (lowercase for new
+ceremonies) and a reason, while clients always receive the same 401 message. A claimed username
 is unverified input. Cookies, assertions and registration links are never logged.
 The one-time `bootstrap.token_created` event is the only credential-bearing log.
 
@@ -84,8 +96,8 @@ The complete link is shown only when generated; create another if you lose it.
 
 As administrator, select **<new> — recipient chooses username** in the Account
 list under **Device registration links**. Generate and privately send its link
-or QR code. The recipient chooses a unique username (1–64 bytes), names their
-device and creates their first passkey. New accounts are regular users, without
+or QR code. The recipient chooses a unique username using the ASCII rules above,
+names their device and creates their first passkey. New accounts are regular users, without
 admin permissions. The account, passkey and invitation consumption commit
 atomically; canceled or failed enrollment creates no account and leaves the
 invitation usable until its expiry. If a name is taken, choose another and retry.

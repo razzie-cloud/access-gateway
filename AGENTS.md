@@ -187,10 +187,21 @@ absolute registration URLs from untrusted Host or forwarded headers.
 - POST /ui/logout: clears auth and returns the signed-out fragment.
 - GET /api/bootstrap, /api/me; POST /api/register/begin, /api/register/finish,
   /api/login/begin, /api/login/finish, /api/logout: JSON API.
-- Login requires a trimmed 1–64-byte username. BeginLogin uses that account's
+- Usernames contain 1–64 ASCII characters from `A–Z`, `a–z`, `0–9`, `_`, `-`, `.`;
+  submission trims surrounding whitespace. Preserve spelling for display and
+  signed identity. Migration `00005` enforces the alphabet/length and uniqueness
+  on `lower(username COLLATE "C")`, refusing incompatible names/case collisions
+  transactionally without merging or renaming accounts. Use that expression for
+  lookups, and recognize `users_username_ci_key` for enrollment conflicts.
+- Login requires a valid username and matches case-insensitively. BeginLogin uses
+  that account's
   credential IDs, padded with deterministic decoys to a common installation-wide
   count/ID-length profile. Omit transport metadata. Unknown and unenrolled users
   follow the same begin path with dummy UUIDs/IDs; never send an empty allowlist.
+  Decoys and new Redis login ceremonies use lowercase usernames for real and
+  dummy accounts alike. The atomic Redis completion script folds both names to
+  accept pre-upgrade mixed-case ceremonies, while auth records retain the stored
+  spelling. Do not weaken UUID/passkey binding or atomic consumption.
   PostgreSQL app_states stores the random login_decoy_secret, shared across
   replicas/restarts and scoped to ORIGIN when deriving IDs. Never log the secret.
   Private session data retains only real allowed IDs (a dummy ID for dummy users)

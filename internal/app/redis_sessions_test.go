@@ -231,6 +231,42 @@ func TestRedisLoginIsConsumedOnceAcrossReplicas(t *testing.T) {
 	assert.False(t, ok)
 }
 
+func TestRedisLoginCaseInsensitiveAccountBinding(t *testing.T) {
+	for _, legacy := range []bool{false, true} {
+		t.Run(fmt.Sprintf("legacy=%t", legacy), func(t *testing.T) {
+			s := testRedisSessions(t, "")
+			ctx := t.Context()
+			data := webauthn.SessionData{Challenge: "challenge"}
+			if legacy {
+				// Bypass PutLogin to model an immutable pre-upgrade ceremony.
+				require.NoError(t, s.put(ctx, s.key("login", "sid"), redisLogin{"aLiCe", data}, ceremonyTTL))
+			} else {
+				require.NoError(t, s.PutLogin(ctx, "sid", "aLiCe", data))
+				name, _, ok, err := s.GetLogin(ctx, "sid")
+				require.NoError(t, err)
+				require.True(t, ok)
+				assert.Equal(t, "alice", name)
+			}
+			ok, err := s.CompleteLogin(ctx, "sid", "wrong", "Bob", 7)
+			require.NoError(t, err)
+			assert.False(t, ok, "different accounts must still be rejected")
+			_, ok, err = s.GetAuth(ctx, "wrong")
+			require.NoError(t, err)
+			assert.False(t, ok)
+			ok, err = s.CompleteLogin(ctx, "sid", "auth", "Alice", 7)
+			require.NoError(t, err)
+			require.True(t, ok)
+			name, ok, err := s.GetAuth(ctx, "auth")
+			require.NoError(t, err)
+			require.True(t, ok)
+			assert.Equal(t, "Alice", name, "authenticated identity keeps stored capitalization")
+			ok, err = s.CompleteLogin(ctx, "sid", "replay", "ALICE", 7)
+			require.NoError(t, err)
+			assert.False(t, ok, "case variants must not allow ceremony reuse")
+		})
+	}
+}
+
 func TestRedisCallbackIsConsumedOnceAcrossReplicas(t *testing.T) {
 	s := testRedisSessions(t, "")
 	peer := peerRedisSessions(t, s)

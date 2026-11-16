@@ -76,7 +76,7 @@ func (m *MemorySessions) GetRegistration(sid string) (registrationContext, webau
 func (m *MemorySessions) PutLogin(sid, username string, sd webauthn.SessionData) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.log[sid] = loginEntry{username: username, sd: sd, exp: time.Now().Add(m.ttl)}
+	m.log[sid] = loginEntry{username: canonicalUsername(username), sd: sd, exp: time.Now().Add(m.ttl)}
 }
 
 func (m *MemorySessions) GetLogin(sid string) (string, webauthn.SessionData, bool) {

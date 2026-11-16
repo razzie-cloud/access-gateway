@@ -140,7 +140,7 @@ func (s *redisSessions) GetRegistration(ctx context.Context, sid string) (regist
 	return v.Registration, v.Data, ok, err
 }
 func (s *redisSessions) PutLogin(ctx context.Context, sid, username string, data webauthn.SessionData) error {
-	return s.put(ctx, s.key("login", sid), redisLogin{username, data}, ceremonyTTL)
+	return s.put(ctx, s.key("login", sid), redisLogin{canonicalUsername(username), data}, ceremonyTTL)
 }
 func (s *redisSessions) GetLogin(ctx context.Context, sid string) (string, webauthn.SessionData, bool, error) {
 	v, ok, err := getSession[redisLogin](ctx, s, s.key("login", sid))
@@ -174,9 +174,9 @@ var finishLogin = redis.NewScript(`
 local raw = redis.call('GET', KEYS[1])
 if not raw or redis.call('PTTL', KEYS[1]) <= 0 then return 0 end
 local login = cjson.decode(raw)
--- Discoverable ceremonies are bound to an account only after signature
--- verification. Retain the account check for older, named ceremonies.
-if login.Username ~= '' and login.Username ~= ARGV[1] then return 0 end
+-- Fold both sides so pending named ceremonies from before ASCII username
+-- normalization remain usable. Signature verification still binds the UUID.
+if login.Username ~= '' and string.lower(login.Username) ~= string.lower(ARGV[1]) then return 0 end
 if not redis.call('SET', KEYS[2], ARGV[2], 'NX', 'PX', ARGV[3]) then return 0 end
 redis.call('DEL', KEYS[1], KEYS[3])
 return 1
@@ -185,7 +185,7 @@ return 1
 func (s *redisSessions) CompleteLogin(ctx context.Context, sid, token, username string, deviceID int64) (bool, error) {
 	payload, _ := json.Marshal(redisAuth{Username: username, DeviceID: deviceID})
 	keys := []string{s.key("login", sid), s.key("auth", token), s.key("registration", sid)}
-	result, err := finishLogin.Run(ctx, s.client, keys, username, payload, authTTL.Milliseconds()).Int()
+	result, err := finishLogin.Run(ctx, s.client, keys, canonicalUsername(username), payload, authTTL.Milliseconds()).Int()
 	s.cache.delete(keys[0], keys[2])
 	if err != nil {
 		return false, sessionStoreError(err)

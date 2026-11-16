@@ -93,6 +93,11 @@ func TestFrontendStateTransitions(t *testing.T) {
 			assert.NotContains(t, html, "<admin>")
 			assert.NotContains(t, html, `style=`)
 			assert.Contains(t, html, `"historyCacheSize":0`)
+			if tc.login || tc.bootstrap || tc.invite || tc.admin {
+				assert.Contains(t, html, `pattern="[A-Za-z0-9_.\-]{1,64}"`)
+				assert.Contains(t, html, `autocapitalize="none" spellcheck="false"`)
+				assert.Contains(t, html, "Capitalization is ignored.")
+			}
 			if tc.invite {
 				assert.Contains(t, html, `id="device-registration"`)
 				assert.Contains(t, html, `name="linkToken"`)

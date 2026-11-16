@@ -8,7 +8,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/go-webauthn/webauthn/webauthn"
@@ -40,10 +39,6 @@ func randomToken() (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(token[:]), nil
-}
-
-func validUsername(username string) bool {
-	return strings.TrimSpace(username) != "" && len(username) <= 64
 }
 
 func linkLifetime(minutes int) (time.Duration, error) {
@@ -93,7 +88,7 @@ func (s *Server) completeRegistration(ctx context.Context, registration registra
 			// unique constraint also protects names claimed by concurrent finishes.
 			if _, err = tx.ExecContext(ctx, `INSERT INTO users(id,username,is_admin,created_at) VALUES($1,$2,FALSE,$3)`, registration.User.ID, registration.User.Username, time.Now().Unix()); err != nil {
 				var pgErr *pgconn.PgError
-				if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "users_username_key" {
+				if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "users_username_ci_key" {
 					return errUsernameTaken
 				}
 				return err

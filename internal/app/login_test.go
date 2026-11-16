@@ -38,7 +38,7 @@ func TestPostgresLoginBeginFiltersAndPadsAccounts(t *testing.T) {
 	var reference map[string]any
 	lists := map[string][]protocol.CredentialDescriptor{}
 	seen := make(map[string]bool)
-	for _, name := range []string{"alice", "bob", "unknown", "unenrolled", "unknown", "another-unknown"} {
+	for _, name := range []string{"alice", "ALICE", "bob", "BOB", "unknown", "UNKNOWN", "unenrolled", "UNENROLLED", "unknown", "another-unknown"} {
 		body := `{"username":" ` + name + ` "}`
 		w := request(s, "POST", "/api/login/begin", body, "")
 		require.Equal(t, 200, w.Code, w.Body.String())
@@ -60,13 +60,13 @@ func TestPostgresLoginBeginFiltersAndPadsAccounts(t *testing.T) {
 			lengths = append(lengths, len(credential.CredentialID))
 			ids = append(ids, credential.CredentialID)
 		}
-		if name == "alice" {
+		if strings.EqualFold(name, "alice") {
 			assert.Contains(t, ids, aliceKey.ID)
 			assert.NotContains(t, ids, bobKey.ID)
 		} else {
 			assert.NotContains(t, ids, aliceKey.ID)
 		}
-		if name != "bob" {
+		if !strings.EqualFold(name, "bob") {
 			assert.NotContains(t, ids, bobKey.ID)
 		}
 		publicKey := options["publicKey"].(map[string]any)
@@ -86,10 +86,10 @@ func TestPostgresLoginBeginFiltersAndPadsAccounts(t *testing.T) {
 		claimed, sd, ok, err := s.sessions.GetLogin(t.Context(), cookies[0].Value)
 		require.NoError(t, err)
 		require.True(t, ok)
-		assert.Equal(t, name, claimed)
+		assert.Equal(t, strings.ToLower(name), claimed)
 		assert.Len(t, sd.UserID, 16)
 		assert.NotEmpty(t, sd.AllowedCredentialIDs)
-		if name == "alice" {
+		if strings.EqualFold(name, "alice") {
 			assert.Equal(t, alice.ID, sd.UserID)
 			assert.Equal(t, [][]byte{aliceKey.ID}, sd.AllowedCredentialIDs)
 		}
@@ -98,6 +98,9 @@ func TestPostgresLoginBeginFiltersAndPadsAccounts(t *testing.T) {
 		assert.NotContains(t, output.String(), cookies[0].Value)
 	}
 	assert.NotEqual(t, lists["unknown"], lists["another-unknown"])
+	for _, name := range []string{"alice", "bob", "unknown", "unenrolled"} {
+		assert.Equal(t, lists[name], lists[strings.ToUpper(name)], "case variants must have the same real and dummy IDs")
+	}
 }
 
 func TestPostgresLoginDecoysSurviveReplicaAndRestart(t *testing.T) {
@@ -172,10 +175,10 @@ func loginFinishRequest(s *Server, sid, body string) *httptest.ResponseRecorder 
 
 func TestPostgresNamedLoginSignatureBindingAndReplay(t *testing.T) {
 	s := postgresServer(t)
-	alice := addUser(t, s, "alice", false)
+	alice := addUser(t, s, "Alice", false)
 	bob := addUser(t, s, "bob", false)
 	credential, key, _ := signingDevice(t, s, alice)
-	w := request(s, "POST", "/api/login/begin", `{"username":"alice"}`, "")
+	w := request(s, "POST", "/api/login/begin", `{"username":"aLiCe"}`, "")
 	require.Equal(t, 200, w.Code)
 	sid := w.Result().Cookies()[0].Value
 	_, sd, ok, err := s.sessions.GetLogin(t.Context(), sid)

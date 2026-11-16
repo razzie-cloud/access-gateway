@@ -170,7 +170,7 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	username := strings.TrimSpace(r.FormValue("username"))
 	if !validUsername(username) {
-		s.writeError(w, r, 400, "Username must contain 1–64 bytes")
+		s.writeError(w, r, 400, usernameValidationMessage)
 		return
 	}
 	id := uuid.New()
@@ -234,7 +234,7 @@ func (s *Server) handleCreateLink(w http.ResponseWriter, r *http.Request) {
 	if target == "" {
 		target = actor.Username
 	}
-	if target != actor.Username && !actor.IsAdmin {
+	if canonicalUsername(target) != canonicalUsername(actor.Username) && !actor.IsAdmin {
 		s.writeError(w, r, 403, "You can only register your own devices")
 		return
 	}

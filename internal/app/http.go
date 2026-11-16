@@ -144,7 +144,7 @@ func (s *Server) handleRegisterBegin(w http.ResponseWriter, r *http.Request) {
 			if registration.NewUser {
 				req.Username = strings.TrimSpace(req.Username)
 				if !validUsername(req.Username) {
-					s.writeError(w, r, 400, "username must contain 1–64 bytes")
+					s.writeError(w, r, 400, usernameValidationMessage)
 					return
 				}
 				_, lookupErr := s.getUserByUsername(ctx, req.Username)
@@ -167,8 +167,12 @@ func (s *Server) handleRegisterBegin(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		req.Username = strings.TrimSpace(req.Username)
-		if !validUsername(req.Username) || req.Token == "" {
+		if req.Username == "" || req.Token == "" {
 			s.writeError(w, r, 400, "username and bootstrap token required")
+			return
+		}
+		if !validUsername(req.Username) {
+			s.writeError(w, r, 400, usernameValidationMessage)
 			return
 		}
 		n, countErr := s.countUsers(ctx)
@@ -326,7 +330,7 @@ func (s *Server) handleLoginBegin(w http.ResponseWriter, r *http.Request) {
 	}
 	req.Username = strings.TrimSpace(req.Username)
 	if !validUsername(req.Username) {
-		s.writeError(w, r, 400, "username must contain 1–64 bytes")
+		s.writeError(w, r, 400, usernameValidationMessage)
 		return
 	}
 	// Record the attempt before the browser prompt, including canceled prompts

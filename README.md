@@ -36,6 +36,10 @@ passkey. The regular user account is created only after enrollment succeeds.
 You can also use **Create a user** to choose the username yourself, then select
 that account when generating its link.
 
+Usernames allow 1–64 ASCII letters, digits, `_`, `-` and `.`. Sign-in and
+uniqueness ignore capitalization; the chosen spelling is kept for display.
+For example, `Alice` and `alice` identify the same account.
+
 Signed-in users can generate links for their own additional devices. Each link
 registers one passkey and expires after the selected lifetime. Treat links and
 QR codes as credentials. Devices and active sessions can be managed in the UI.
