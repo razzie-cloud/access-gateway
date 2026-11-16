@@ -305,6 +305,7 @@ code { overflow-wrap: anywhere; }
 .icon-tile { display: grid; place-items: center; width: 40px; height: 40px; background: var(--pico-card-sectioning-background-color); color: var(--pico-muted-color); border-radius: .5rem; }
 .auth-wrap .auth-form h1 { font-size: 1.65rem; margin: 0 0 .8rem; }
 .auth-wrap { overflow: visible; }
+.auth-wrap > section { margin-bottom: 0; }
 .auth-story { border-radius: 1rem 0 0 1rem; }
 .auth-form form { min-width: 0; }
 .link-context { display: flex; align-items: center; gap: .8rem; padding: .85rem 1rem; margin: 1rem 0; border: 1px solid var(--pico-muted-border-color); border-radius: .5rem; background: var(--pico-card-sectioning-background-color); }
