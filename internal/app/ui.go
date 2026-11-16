@@ -28,6 +28,7 @@ type viewData struct {
 	NeedsRegistration bool
 	Invite            bool
 	NewUser           bool
+	LoginOnce         bool
 	User              *User
 	Users             []User
 	Error             string
@@ -43,6 +44,21 @@ type viewData struct {
 type adminUser struct {
 	User
 	UUID string
+}
+
+// This endpoint renders controls only. Bearer tokens never travel in GETs or
+// HTMX requests; the bridge retains the fragment token in the surrounding form.
+func (s *Server) handleRegistrationOptions(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		s.methodNotAllowed(w, r, http.MethodGet)
+		return
+	}
+	mode := r.URL.Query().Get("mode")
+	if mode != "enroll" && mode != "login" {
+		s.writeError(w, r, http.StatusBadRequest, "Invalid registration action")
+		return
+	}
+	s.render(w, r, http.StatusOK, "enrollment-options", viewData{LoginOnce: mode == "login"})
 }
 
 func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name string, data viewData) {

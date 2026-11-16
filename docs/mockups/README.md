@@ -59,6 +59,12 @@ screenshots were saved and visually reviewed. Parent/component whitespace
 checks passed. No Go checks or live WebAuthn/backend authentication ran because
 only mockup files and documentation changed. Nothing was published or deployed.
 
+The approved split-button flow is now implemented in the embedded gateway UI.
+See [one-time link login](../reference.md#sign-in-once-with-a-registration-link)
+for the endpoint, session policy and cross-store failure behavior, and the
+[parent implementation notes](../../../docs/frontend-mockups.md#gateway-registration-link-one-time-login)
+for verification. These mockup pages remain independent simulated examples.
+
 ## Account identity and alignment proposal
 
 The updated overview shows Files' shield icon beside the signed-in username in

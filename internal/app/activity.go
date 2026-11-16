@@ -66,6 +66,9 @@ func (s *Server) activity(r *http.Request, actor User) (viewData, error) {
 			continue
 		}
 		view := sessionView{sessionSummary: session, DeviceName: "Unknown device", Current: session.ID == currentID || session.ParentID == currentID}
+		if session.LinkLogin {
+			view.DeviceName = "One-time link login"
+		}
 		for i := range devices {
 			d := &devices[i]
 			if d.Username != session.Username {
@@ -77,7 +80,7 @@ func (s *Server) activity(r *http.Request, actor User) (viewData, error) {
 					d.Current = true
 				}
 			}
-			if session.DeviceID == d.ID || session.DeviceID == 0 {
+			if session.DeviceID == d.ID || (session.DeviceID == 0 && !session.LinkLogin) {
 				d.InUse = true
 			}
 		}

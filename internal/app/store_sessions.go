@@ -26,6 +26,7 @@ type sessionStore interface {
 	PutLogin(context.Context, string, string, webauthn.SessionData) error
 	GetLogin(context.Context, string) (string, webauthn.SessionData, bool, error)
 	PutAuth(context.Context, string, string) error
+	PutLinkAuth(context.Context, string, string) error
 	GetAuth(context.Context, string) (string, bool, error)
 	CompleteLogin(context.Context, string, string, string, int64) (bool, error)
 	DeleteAuth(context.Context, string) error
@@ -48,6 +49,7 @@ type sessionSummary struct {
 	Origin    string
 	ExpiresAt time.Time
 	DeviceID  int64
+	LinkLogin bool
 	ParentID  string
 }
 

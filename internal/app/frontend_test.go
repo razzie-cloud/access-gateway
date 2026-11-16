@@ -183,3 +183,26 @@ func TestActivityRefreshErrorsKeepPanel(t *testing.T) {
 		assert.NotContains(t, w.Body.String(), "<!doctype")
 	}
 }
+
+func TestRegistrationModeFragments(t *testing.T) {
+	s := unitServer()
+	for _, mode := range []string{"enroll", "login"} {
+		w := request(s, http.MethodGet, "/ui/registration-options?mode="+mode, "", "")
+		require.Equal(t, http.StatusOK, w.Code)
+		body := w.Body.String()
+		assert.Contains(t, body, `id="enrollment-options" data-registration-mode="`+mode+`"`)
+		assert.Contains(t, body, `role="group"`)
+		assert.Contains(t, body, `hx-params="none"`)
+		assert.Equal(t, mode == "enroll", strings.Contains(body, `name="deviceName"`))
+		assert.NotContains(t, body, `name="linkToken"`, "token stays in the surrounding form")
+		assert.NotContains(t, body, `style=`)
+		assert.Equal(t, "no-store", w.Header().Get("Cache-Control"))
+	}
+	r := httptest.NewRequest(http.MethodGet, "/ui/registration-options?mode=invalid", nil)
+	r.Header.Set("HX-Request", "true")
+	w := httptest.NewRecorder()
+	s.handler().ServeHTTP(w, r)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Equal(t, "#status", w.Header().Get("HX-Retarget"))
+	assert.Equal(t, "innerHTML", w.Header().Get("HX-Reswap"))
+}

@@ -37,7 +37,7 @@ func (s *redisSessions) ListSessions(ctx context.Context) ([]sessionSummary, err
 				if !ok {
 					continue
 				}
-				summary := sessionSummary{ID: strings.TrimPrefix(key, s.prefix+kind+":"), Kind: "Gateway", Username: record.Username, ExpiresAt: expires, DeviceID: record.DeviceID}
+				summary := sessionSummary{ID: strings.TrimPrefix(key, s.prefix+kind+":"), Kind: "Gateway", Username: record.Username, ExpiresAt: expires, DeviceID: record.DeviceID, LinkLogin: record.LinkLogin}
 				if kind == "app" {
 					parent, parentExpires, live, err := s.sessionMetadata(ctx, s.prefix+"auth:"+record.Parent)
 					if err != nil {
@@ -49,6 +49,7 @@ func (s *redisSessions) ListSessions(ctx context.Context) ([]sessionSummary, err
 					}
 					summary.Kind, summary.Username, summary.Origin = "Application", parent.Username, record.Origin
 					summary.DeviceID, summary.ParentID = parent.DeviceID, record.Parent
+					summary.LinkLogin = parent.LinkLogin
 					if parentExpires.Before(summary.ExpiresAt) {
 						summary.ExpiresAt = parentExpires
 					}
@@ -79,6 +80,7 @@ func (s *redisSessions) ListSessions(ctx context.Context) ([]sessionSummary, err
 type sessionMetadata struct {
 	Username, Origin, Parent string
 	DeviceID                 int64
+	LinkLogin                bool
 }
 
 func (s *redisSessions) sessionMetadata(ctx context.Context, key string) (record sessionMetadata, expires time.Time, ok bool, err error) {

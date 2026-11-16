@@ -108,7 +108,9 @@ func TestLoginBudgetIncludesFinishAndAuthenticatedRequests(t *testing.T) {
 	for i := range loginRequestsPerMinute + 1 {
 		// Invalid JSON and missing SIDs must consume the same IP budget too.
 		path := "/api/login/begin"
-		if i%2 == 0 {
+		if i%3 == 0 {
+			path = "/api/login/link"
+		} else if i%2 == 0 {
 			path = "/api/login/finish"
 		}
 		w := request(s, "POST", path, "{", "valid")

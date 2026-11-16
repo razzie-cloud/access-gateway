@@ -167,6 +167,9 @@ func (s *Server) writeError(w http.ResponseWriter, r *http.Request, status int, 
 		if panel := activityRefreshPanel(r); panel != "" {
 			w.Header().Set("HX-Retarget", "#"+panel+"-feedback")
 			w.Header().Set("HX-Reswap", "innerHTML")
+		} else if r.URL.Path == "/ui/registration-options" {
+			w.Header().Set("HX-Retarget", "#status")
+			w.Header().Set("HX-Reswap", "innerHTML")
 		}
 	} else {
 		// The proxy may display this page on any protected app's origin. Only the

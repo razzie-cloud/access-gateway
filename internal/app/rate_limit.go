@@ -154,7 +154,7 @@ func (s *Server) enforceRateLimits(w http.ResponseWriter, r *http.Request) bool 
 			return false
 		}
 	}
-	if r.Method == http.MethodPost && (r.URL.Path == "/api/login/begin" || r.URL.Path == "/api/login/finish") {
+	if r.Method == http.MethodPost && (r.URL.Path == "/api/login/begin" || r.URL.Path == "/api/login/finish" || r.URL.Path == "/api/login/link") {
 		if ok, retry := s.limits.allow(rateLimitKey{ip: ip, login: true}, loginRequestsPerMinute, now); !ok {
 			s.writeRateLimit(w, r, retry)
 			return false

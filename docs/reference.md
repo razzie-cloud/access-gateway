@@ -35,7 +35,7 @@ expiration from **1 minute to 30 days** (default: 60 minutes), then select
 **Generate link and QR code**. Open the link on the new device or scan the QR
 code, name the device and create its passkey. The QR image can also be downloaded.
 
-Each link registers one passkey for its designated account and expires at the
+Each link can register one passkey for its designated account and expires at the
 displayed time, even if registration is already in progress. A canceled prompt
 can be retried while the link remains valid. After registration, sign-in starts
 automatically with the new passkey, without asking for a username. Complete the
@@ -45,6 +45,43 @@ setup. A canceled or failed sign-in leaves the passkey registered; use
 Registration itself does not issue an authenticated session: a separate signed
 WebAuthn assertion must succeed through the normal login endpoints.
 Multiple devices can have separate passkeys.
+
+### Sign in once with a registration link
+
+For an existing account, the dropdown attached to **Create passkey on this
+device** also offers **Sign in once**. Selecting it shows an explanation and
+removes the device-name field. Select **Sign in once** to consume the link and
+sign in on this browser without creating a passkey. Choosing the option alone
+does not consume the link; the dropdown can return to enrollment.
+
+Enrollment remains the default. Either successful action consumes the same
+single-use link, including when requests race across replicas. New-user
+invitations require a username and first passkey and cannot log in this way.
+Existing valid links work without regeneration or a database migration.
+
+The browser POSTs JSON `{"linkToken":"…"}` to `/api/login/link`; the account
+comes exclusively from the link. The endpoint rejects username/bootstrap
+overrides, expired/used links and new-user invitations. It shares the login
+request budget and requires the normal Origin and JSON content-type checks.
+The token stays in the fragment until the bridge removes it from browser history,
+then travels only in POST bodies, never URLs or HTMX mode requests.
+
+PostgreSQL locks the same link row as enrollment, rechecks unused state and
+expiry, and marks it used. Redis creates a fresh session while the lock is held;
+the cookie is sent only after the consumption commits. A failed Redis write
+rolls back consumption. A failed/ambiguous database commit sends no cookie and
+attempts to remove the undisclosed Redis session using an independent context.
+If a commit reply or successful HTTP response is lost after consumption, the
+link may already be used; ask for a new link. It is never reused to recover a
+session token.
+
+Link-login sessions follow the normal seven-day gateway lifetime, persistence,
+SSO and revocation policy. They appear as **One-time link login** in activity;
+derived app sessions inherit that label and do not claim a registered device.
+These sessions do not prevent removing unused devices. Older **Unknown device**
+sessions retain their conservative device-removal protection. Signing out or
+revoking the gateway session invalidates its app sessions as usual; returning
+afterward requires a passkey or another unused link.
 
 Usernames contain 1–64 ASCII characters: `A–Z`, `a–z`, `0–9`, `_`, `-` and `.`.
 Leading and trailing whitespace is trimmed on submission. Matching and uniqueness
@@ -88,8 +125,9 @@ sessions are preserved. In-progress ceremonies from older login flows must be
 restarted. Legacy credentials with unknown discoverability are omitted from
 enrollment exclusions so the same authenticator can be upgraded.
 
-Treat links and QR codes like credentials: anyone holding one can register a
-device for that account. Share them privately and use a separate link per device.
+Treat links and QR codes like credentials: anyone holding an existing-account
+link can register a device or sign in once to that account. Share them privately
+and use a separate link per enrollment or sign-in.
 The complete link is shown only when generated; create another if you lose it.
 
 ## Add a user
@@ -135,8 +173,9 @@ left/right padding. PicoCSS and HTMX are embedded locally; no frontend build is 
 
 Every signed-in user can view their own devices and active gateway/application
 sessions. Administrators see all users, UUIDs, devices and sessions. Device names
-identify registered passkeys; each new session records the passkey used to sign
-in, and application sessions inherit that association.
+identify registered passkeys; passkey sessions record the device used to sign
+in, and application sessions inherit that association. Link-login sessions are
+explicitly labeled without a device association.
 
 Open a device's **Manage** disclosure to **Rename** it at any time, including
 the current device, or remove an unused device. **Remove session**

@@ -40,9 +40,12 @@ Usernames allow 1–64 ASCII letters, digits, `_`, `-` and `.`. Sign-in and
 uniqueness ignore capitalization; the chosen spelling is kept for display.
 For example, `Alice` and `alice` identify the same account.
 
-Signed-in users can generate links for their own additional devices. Each link
-registers one passkey and expires after the selected lifetime. Treat links and
-QR codes as credentials. Devices and active sessions can be managed in the UI.
+Signed-in users can generate links for their own additional devices. Each
+existing-account link can register one passkey or sign in once without adding a
+device. Enrollment remains the default; use its button's dropdown to choose
+**Sign in once**. Either action consumes the link. New-user invitations still
+require a first passkey. Links expire after the selected lifetime. Treat links
+and QR codes as credentials. Devices and active sessions can be managed in the UI.
 
 ## Connect your apps
 

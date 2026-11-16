@@ -40,6 +40,7 @@ func (s *Server) routes() {
 	handle("/ui/devices/remove", s.handleRemoveDevice)
 	handle("/ui/sessions/remove", s.handleRemoveSession)
 	handle("/ui/links", s.handleCreateLink)
+	handle("/ui/registration-options", s.handleRegistrationOptions)
 	handle("/ui/logout", s.handleUILogout)
 	handle("/api/bootstrap", s.handleBootstrap)
 	handle("/api/register/begin", s.handleRegisterBegin)
@@ -47,6 +48,7 @@ func (s *Server) routes() {
 	handle("/api/register/finish", s.handleRegisterFinish)
 	handle("/api/login/begin", s.handleLoginBegin)
 	handle("/api/login/finish", s.handleLoginFinish)
+	handle("/api/login/link", s.handleLinkLogin)
 	handle("/api/me", s.handleMe)
 	handle("/api/logout", s.handleLogout)
 }

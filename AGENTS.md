@@ -145,10 +145,20 @@ absolute registration URLs from untrusted Host or forwarded headers.
   invitation to its new user and mark the link used in the same transaction. Rollback must
   preserve the link if credential insertion fails. Enrollment must never upsert
   an existing credential or overwrite another account's credential.
-- Consuming a link does not issue an auth session. Registration finish returns
+- Enrollment consumption does not issue an auth session. Registration finish returns
   the token-bound username only after commit; the browser immediately runs a
   separate signed login with the new credential. Canceled/failed login retries
   must not repeat enrollment or reuse the consumed link.
+- POST /api/login/link accepts only JSON linkToken for an existing-account link.
+  It locks the same PostgreSQL row as enrollment, rechecks expiry/unused state,
+  and consumes the link while creating a fresh Redis session. Send its cookie
+  only after commit; roll back on Redis failures and clean up undisclosed sessions
+  on ambiguous writes/failed commits with an independent bounded context. Never
+  make consumed links recoverable or accept new-user invitations for login.
+  This endpoint shares the login rate budget, Origin and content-type guards.
+  Redis LinkLogin=true distinguishes these sessions (and inherited app metadata)
+  from legacy DeviceID=0 records; link sessions must not protect unrelated devices.
+  Keep legacy unknown-device removal protection. Normal TTL/SSO/revocation applies.
 - Migration `00003` adds device_name to passkeys. Registration accepts optional
   deviceName, trims it and stores it in the ceremony and enrollment transaction.
   Names contain 1–80 Unicode characters without controls. Old passkeys and
@@ -162,7 +172,7 @@ absolute registration URLs from untrusted Host or forwarded headers.
 
 ## HTTP and sessions
 
-- Anonymous requests are limited to 60/minute/IP. POST login begin/finish share
+- Anonymous requests are limited to 60/minute/IP. POST login begin/finish/link share
   a separate 10/minute/IP budget even with a live session. Return 429 with
   Retry-After before allocating state. Live gateway and origin-bound app sessions
   bypass only the anonymous budget. Process-local counters are mutex-protected,
@@ -178,8 +188,9 @@ absolute registration URLs from untrusted Host or forwarded headers.
   sessions. Device removal requires no live sessions (see locking rules above).
 - Session references are token hashes; never render bearer tokens or ceremony
   data. Redis listing scans only the gateway namespace and excludes app sessions
-  with expired/revoked parents. New auth payloads include DeviceID; app sessions
-  inherit it through their parent. Legacy sessions remain usable with unknown
+  with expired/revoked parents. Passkey auth payloads include DeviceID; link
+  sessions have LinkLogin=true and no device ID. App sessions inherit these
+  through their parent. Legacy sessions remain usable with unknown
   devices. Removing an auth record revokes every app session derived from it.
 - POST /ui/users: admin-only account creation (`username` form field); returns
   refreshed account HTML on success using HX-Retarget. Unique usernames return 409.
@@ -213,6 +224,10 @@ absolute registration URLs from untrusted Host or forwarded headers.
   return the same 401 message. Log bounded, quoted claimed_username at begin
   (including canceled prompts/unknown names) and failure, never assertion data.
   Padding mitigates enumeration but cannot eliminate credential-ID privacy leaks.
+- GET /ui/registration-options?mode=enroll|login renders action controls only.
+  HTMX never submits the token or device drafts; the surrounding bridge form
+  retains the token across swaps. Default to enrollment, hide alternatives for
+  new-user invitations, and keep login independent of WebAuthn browser support.
 - All POSTs require an Origin header matching configured ORIGIN. /api/ POSTs also
   require application/json. Maintain these checks when adding mutation routes.
 - Responses use no-store, no-referrer, nosniff, and a self-only CSP (QR images

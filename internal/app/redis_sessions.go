@@ -29,8 +29,9 @@ type redisLogin struct {
 }
 
 type redisAuth struct {
-	Username string
-	DeviceID int64
+	Username  string
+	DeviceID  int64
+	LinkLogin bool
 }
 type redisApp struct{ Origin, Parent string }
 type redisFlow struct{ Origin, ReturnTo, StateHash string }
@@ -148,6 +149,9 @@ func (s *redisSessions) GetLogin(ctx context.Context, sid string) (string, webau
 }
 func (s *redisSessions) PutAuth(ctx context.Context, token, username string) error {
 	return s.put(ctx, s.key("auth", token), redisAuth{Username: username}, authTTL)
+}
+func (s *redisSessions) PutLinkAuth(ctx context.Context, token, username string) error {
+	return s.put(ctx, s.key("auth", token), redisAuth{Username: username, LinkLogin: true}, authTTL)
 }
 func (s *redisSessions) GetAuth(ctx context.Context, token string) (string, bool, error) {
 	v, ok, err := getSession[redisAuth](ctx, s, s.key("auth", token))

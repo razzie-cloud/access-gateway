@@ -304,6 +304,24 @@ fieldset { min-width: 0; }
 code { overflow-wrap: anywhere; }
 .icon-tile { display: grid; place-items: center; width: 40px; height: 40px; background: var(--pico-card-sectioning-background-color); color: var(--pico-muted-color); border-radius: .5rem; }
 .auth-wrap .auth-form h1 { font-size: 1.65rem; margin: 0 0 .8rem; }
+.auth-wrap { overflow: visible; }
+.auth-story { border-radius: 1rem 0 0 1rem; }
+.auth-form form { min-width: 0; }
+.link-context { display: flex; align-items: center; gap: .8rem; padding: .85rem 1rem; margin: 1rem 0; border: 1px solid var(--pico-muted-border-color); border-radius: .5rem; background: var(--pico-card-sectioning-background-color); }
+.link-context strong,.link-context small { display: block; }
+.link-context small,.auth-form .action-help { font-size: .78rem; color: var(--pico-muted-color); }
+.link-context>.icon { color: var(--pico-primary); }
+.registration-actions[role="group"] { margin: .3rem 0 0; }
+.registration-actions>button { width: auto; margin: 0; padding-inline: .75rem; white-space: normal; }
+.registration-actions>details.dropdown { flex: 0 0 44px; margin: 0; }
+.registration-actions>details>summary[role="button"] { height: 100%; width: 44px; margin: 0; padding: .65rem; border-radius: 0 var(--pico-border-radius) var(--pico-border-radius) 0; border-left: 1px solid var(--pico-primary-inverse); }
+.registration-actions details.dropdown>ul { width: max-content; min-width: 100%; max-width: calc(100vw - 6rem); right: 0; left: auto; }
+.registration-actions details.dropdown>ul button { display: block; width: 100%; margin: 0; padding: .6rem .8rem; border: 0; border-radius: 0; background: transparent; color: var(--pico-dropdown-color); text-align: left; white-space: normal; box-shadow: none; }
+.registration-actions details.dropdown>ul button:hover,.registration-actions button[aria-current="true"] { background: var(--pico-dropdown-hover-background-color); }
+.registration-actions details.dropdown>ul small { font-size: .74rem; }
+.registration-actions :focus-visible { outline: 2px solid var(--pico-primary); outline-offset: 3px; }
+.auth-form .action-help { margin: 1rem 0 0; }
+@media(max-width:760px) { .auth-story { border-radius: 1rem 1rem 0 0; } }
 .auth-story h2 { font-size: 2.8rem; line-height: 1.12; letter-spacing: -.09rem; max-width: 380px; margin: .4rem 0 1rem; }
 .auth-form .auth-footnote { margin-bottom: 0; }
 .auth-form small { display: block; }

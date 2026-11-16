@@ -36,6 +36,15 @@ func (m memorySessionStore) GetAuth(_ context.Context, t string) (string, bool, 
 	n, ok := m.mem.GetAuth(t)
 	return n, ok, nil
 }
+func (m memorySessionStore) PutLinkAuth(_ context.Context, token, username string) error {
+	m.mem.mu.Lock()
+	defer m.mem.mu.Unlock()
+	if _, exists := m.mem.auth[token]; exists {
+		return sessionStoreError(errors.New("session token already exists"))
+	}
+	m.mem.auth[token] = authEntry{username: username, exp: time.Now().Add(authTTL), linkLogin: true}
+	return nil
+}
 func (m memorySessionStore) DeleteAuth(_ context.Context, t string) error {
 	m.mem.DeleteAuth(t)
 	return nil
@@ -88,12 +97,12 @@ func (m memorySessionStore) ListSessions(_ context.Context) ([]sessionSummary, e
 	now := time.Now()
 	for token, auth := range m.mem.auth {
 		if now.Before(auth.exp) {
-			sessions = append(sessions, sessionSummary{ID: hashToken(token), Kind: "Gateway", Username: auth.username, ExpiresAt: auth.exp, DeviceID: auth.deviceID})
+			sessions = append(sessions, sessionSummary{ID: hashToken(token), Kind: "Gateway", Username: auth.username, ExpiresAt: auth.exp, DeviceID: auth.deviceID, LinkLogin: auth.linkLogin})
 		}
 	}
 	for token, app := range m.mem.apps {
 		if auth, ok := m.mem.auth[app.parent]; ok && now.Before(auth.exp) {
-			sessions = append(sessions, sessionSummary{ID: hashToken(token), Kind: "Application", Username: auth.username, Origin: app.origin, ExpiresAt: auth.exp, DeviceID: auth.deviceID, ParentID: hashToken(app.parent)})
+			sessions = append(sessions, sessionSummary{ID: hashToken(token), Kind: "Application", Username: auth.username, Origin: app.origin, ExpiresAt: auth.exp, DeviceID: auth.deviceID, LinkLogin: auth.linkLogin, ParentID: hashToken(app.parent)})
 		}
 	}
 	return sessions, nil

@@ -35,7 +35,8 @@ func TestRoutesRejectWrongMethod(t *testing.T) {
 		{"POST", "/forward_auth"}, {"POST", "/forward_auth/admin"}, {"POST", "/auth/authorize"},
 		{"GET", "/ui/users"}, {"GET", "/ui/links"}, {"GET", "/ui/logout"},
 		{"GET", "/api/register/begin"}, {"GET", "/api/register/finish"}, {"GET", "/api/register/link"},
-		{"GET", "/api/login/begin"}, {"GET", "/api/login/finish"}, {"GET", "/api/logout"},
+		{"GET", "/api/login/begin"}, {"GET", "/api/login/finish"}, {"GET", "/api/login/link"}, {"GET", "/api/logout"},
+		{"POST", "/ui/registration-options"},
 	} {
 		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
 			w := request(s, tc.method, tc.path, "", "")

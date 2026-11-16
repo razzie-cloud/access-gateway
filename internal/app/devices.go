@@ -90,7 +90,7 @@ func (s *Server) removeDevice(ctx context.Context, actor User, id int64) error {
 	for _, session := range sessions {
 		// Legacy sessions cannot identify their device. Conservatively protect
 		// the account's devices until those sessions are ended or expire.
-		if session.Username == username && (session.DeviceID == id || session.DeviceID == 0) {
+		if session.Username == username && (session.DeviceID == id || (session.DeviceID == 0 && !session.LinkLogin)) {
 			return errDeviceInUse
 		}
 	}

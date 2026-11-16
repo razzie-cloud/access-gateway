@@ -15,21 +15,47 @@ async function api(path, body) {
 // Tokens stay out of request URLs, access logs, referrers and HTMX history snapshots.
 const tokenInput = document.getElementById("link-token");
 let invitationReady;
+function applyInvitation(details) {
+  const label = document.getElementById("invitation-username");
+  if (label) {
+    label.hidden = !details.newUser;
+    label.querySelector("input").disabled = !details.newUser;
+  }
+  const choices = document.getElementById("registration-choices");
+  if (choices) choices.hidden = details.newUser;
+  if (details.newUser) {
+    document.getElementById("enrollment-description").textContent = "Choose your username and create your first passkey to join Razzie Cloud.";
+    document.getElementById("registration-help").textContent = "Your first passkey is required to create an account. One-time login is available for existing accounts.";
+  }
+}
 function prepareInvitation() {
   if (!/^[a-f0-9]{64}$/.test(tokenInput.value)) return Promise.reject(new Error("Open a complete registration link, or ask for a new one."));
   if (!invitationReady) {
-    invitationReady = api("/api/register/link", { linkToken: tokenInput.value }).then(details => {
-      const label = document.getElementById("invitation-username");
-      label.hidden = !details.newUser;
-      label.querySelector("input").disabled = !details.newUser;
-      if (details.newUser) document.getElementById("enrollment-description").textContent = "Choose your username and create your first passkey to join Razzie Cloud.";
-    }).catch(error => {
+    invitationReady = api("/api/register/link", { linkToken: tokenInput.value }).catch(error => {
       invitationReady = null;
       throw error;
     });
   }
-  return invitationReady;
+  return invitationReady.then(details => { applyInvitation(details); return details; });
 }
+
+// HTMX swaps only the action controls. The surrounding form retains the token;
+// mode selection never consumes it or transmits it in a GET request.
+document.addEventListener("htmx:afterSwap", async event => {
+  if (!tokenInput || event.detail.target.id !== "enrollment-options") return;
+  try {
+    const details = await prepareInvitation();
+    const options = document.getElementById("enrollment-options");
+    if (details.newUser && options.dataset.registrationMode === "login") {
+      document.getElementById("registration-choices").hidden = true;
+      status("Create your first passkey to set up your account.");
+      return;
+    }
+    document.getElementById("registration-submit").disabled = false;
+    status("");
+    (document.getElementById("device-name") || document.getElementById("registration-submit")).focus();
+  } catch (error) { status(error.message); }
+});
 if (tokenInput) {
   tokenInput.value = location.hash.slice(1);
   history.replaceState(null, "", location.pathname);
@@ -80,7 +106,18 @@ document.addEventListener("submit", async (event) => {
   const button = form.querySelector("button");
   button.disabled = true;
   form.setAttribute("aria-busy", "true");
+  const choices = document.getElementById("registration-choices");
+  if (choices) { choices.open = false; choices.hidden = true; }
   try {
+    const linkLogin = tokenInput && document.getElementById("enrollment-options")?.dataset.registrationMode === "login";
+    if (linkLogin) {
+      const details = await prepareInvitation();
+      if (details.newUser) throw new Error("Create your first passkey to set up your account.");
+      await api("/api/login/link", { linkToken: tokenInput.value });
+      tokenInput.value = "";
+      location.replace("/");
+      return;
+    }
     if (!window.PublicKeyCredential) throw new Error("Passkeys require a supported browser and HTTPS (or localhost).");
     const mode = form.dataset.webauthn;
     if (!pendingSignIns.has(form)) {
@@ -95,6 +132,7 @@ document.addEventListener("submit", async (event) => {
         }
         for (const input of form.querySelectorAll("input, select, textarea")) input.disabled = true;
         button.textContent = "Sign in with your new passkey";
+        if (choices) choices.hidden = true;
       }
     }
     const pending = pendingSignIns.get(form);
@@ -114,7 +152,15 @@ document.addEventListener("submit", async (event) => {
   } catch (error) {
     status(pendingSignIns.has(form) ? `Passkey registered. Sign-in did not complete: ${error.message} Choose “Sign in with your new passkey” to retry.` : error.message);
   }
-  finally { button.disabled = false; form.removeAttribute("aria-busy"); }
+  finally {
+    button.disabled = false;
+    form.removeAttribute("aria-busy");
+    if (choices && !pendingSignIns.has(form) && tokenInput?.value) {
+      // A failed operation retains the token and lets the user retry or change
+      // modes. Invitations continue to hide the existing-account alternative.
+      prepareInvitation().catch(() => {});
+    }
+  }
 });
 
 // Display server-rendered validation and authorization errors in the form's target.
@@ -130,11 +176,29 @@ document.addEventListener("htmx:sendError", () => status("Unable to reach the ga
 // Replacing a panel removes its focused Refresh button. Restore keyboard focus
 // without moving the page or taking focus back after the user moves elsewhere.
 const refreshFocus = new WeakSet();
+const registrationRequests = new WeakMap();
 document.addEventListener("htmx:beforeRequest", event => {
   const source = event.detail.elt;
+  const registrationForm = source.closest("#device-registration");
+  if (registrationForm) {
+    if (registrationForm.getAttribute("aria-busy") === "true") {
+      event.preventDefault();
+      return;
+    }
+    registrationRequests.set(event.detail.xhr, registrationForm);
+    registrationForm.setAttribute("aria-busy", "true");
+    document.getElementById("registration-submit").disabled = true;
+  }
   if (source.matches("[data-activity-refresh]") && document.activeElement === source) {
     refreshFocus.add(event.detail.xhr);
   }
+});
+document.addEventListener("htmx:afterRequest", event => {
+  const form = registrationRequests.get(event.detail.xhr);
+  if (!form) return;
+  registrationRequests.delete(event.detail.xhr);
+  form.removeAttribute("aria-busy");
+  document.getElementById("registration-submit").disabled = false;
 });
 document.addEventListener("htmx:afterSettle", event => {
   if (!refreshFocus.has(event.detail.xhr)) return;
