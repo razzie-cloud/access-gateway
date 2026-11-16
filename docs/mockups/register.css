@@ -1,0 +1,35 @@
+/* Registration-link concept: Pico group + native dropdown, with HTMX fixtures. */
+:root { --app-max-width: 1680px; }
+.topbar { height: auto; min-height: 78px; max-width: var(--app-max-width); margin-inline: auto; }
+.brand-group { display: flex; align-items: center; flex-wrap: wrap; gap: .7rem; min-width: 0; }
+.brand-group .service-name { text-decoration: none; white-space: nowrap; }
+.auth-wrap { overflow: visible; grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
+.auth-story { border-radius: .85rem 0 0 .85rem; }
+.auth-story h2 { font-size: 2.8rem; line-height: 1.12; letter-spacing: -.09rem; margin: .4rem 0 1rem; }
+.auth-form { min-width: 0; }
+.auth-form h1 { font-size: 1.65rem; margin: 0 0 .8rem; letter-spacing: -.04rem; }
+.auth-form .link-context { display: flex; align-items: center; gap: .8rem; padding: .85rem 1rem; margin-bottom: 1.1rem; background: var(--pico-card-sectioning-background-color); border: 1px solid var(--pico-muted-border-color); border-radius: .5rem; }
+.link-context strong,.link-context small { display: block; }
+.link-context small { font-size: .78rem; }
+.link-context>.icon { color: var(--pico-primary); }
+.registration-actions[role="group"] { margin-top: .3rem; margin-bottom: 0; }
+.registration-actions>button { width: auto; margin: 0; padding-inline: .75rem; white-space: normal; }
+.registration-actions>details.dropdown { flex: 0 0 44px; margin: 0; }
+.registration-actions>details>summary[role="button"] { height: 100%; width: 44px; margin: 0; padding: .65rem; border-radius: 0 var(--pico-border-radius) var(--pico-border-radius) 0; border-left: 1px solid var(--pico-primary-inverse); }
+.registration-actions details.dropdown>ul { width: max-content; min-width: 100%; max-width: calc(100vw - 6rem); right: 0; left: auto; }
+.registration-actions details.dropdown>ul a { white-space: normal; }
+.registration-actions details.dropdown>ul small { display: block; font-size: .74rem; }
+.registration-actions a[aria-current="true"] { background: var(--pico-dropdown-hover-background-color); }
+.registration-actions :focus-visible { outline: 2px solid var(--pico-primary); outline-offset: 3px; }
+.auth-form .action-help { font-size: .78rem; color: var(--pico-muted-color); margin: 1rem 0 0; }
+.auth-form .notice p { margin: .5rem 0 0; }
+.link-error { padding: 1rem; margin-bottom: 1.5rem; border: 1px solid var(--pico-del-color); border-radius: .5rem; }
+@media(max-width:760px) {
+ .brand { flex-wrap: wrap; }
+ .auth-wrap { grid-template-columns: minmax(0,1fr); }
+ .auth-story { border-radius: .85rem .85rem 0 0; min-height: 0; padding: 1.5rem 2rem; }
+ .auth-story h2 { font-size: 2rem; }
+ .auth-story>p { max-width: none; }
+ .auth-story .story-footer { margin-top: .8rem; }
+ .auth-form { padding: 2rem 1.25rem; }
+}

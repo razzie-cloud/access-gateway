@@ -8,10 +8,56 @@ Serve the **Razzie Cloud parent directory** with
 | --- | --- | --- |
 | Administrator overview | [index.html](index.html) | Devices and sessions beside enrollment/user creation |
 | Passkey sign-in | [login.html](login.html) | Two-column entry screen and clear primary action |
-| Device enrollment | [register.html](register.html) | Device naming and a separate return to sign-in |
+| Registration link | [register.html](register.html) | Enrollment by default, with one-time login in a Pico split-button dropdown |
+| New-user invitation | [register-invitation.html](register-invitation.html) | Username and first passkey required to create an account |
 | Administrator access denied | [admin-denied.html](admin-denied.html) | Centered branded 403 page on a protected app hostname |
 
 [Account screenshot](index-desktop.png) · [Sign-in screenshot](login-desktop.png)
+
+## Registration link: one-time login proposal
+
+Open [the light preview](register.html) or [the dark preview](dark/register.html).
+The existing **Create passkey on this device** action stays the default. Its
+attached native dropdown sits inside a PicoCSS `role="group"` and offers
+**Create a passkey** and **Sign in once**. Selecting the latter replaces the
+device-name form with an explanation and a **Sign in once** action. Selection
+alone does not consume the link. The dropdown also lets the recipient return
+to enrollment. Enrollment still requires a device name; one-time login does not.
+
+The proposed login consumes the same existing-account registration link for a
+browser session without adding a passkey or registered device. Either use makes
+the link unavailable for subsequent enrollment or login. Session lifetime and
+revocation should follow the gateway's normal session policy. The success fixture
+links to the existing fixed account overview; its device/session counts do not
+simulate the new session. Production authentication is unchanged by these files.
+
+The preview toolbar includes an **Expired / used link** fixture and a
+[new-user invitation](register-invitation.html), also available in
+[dark mode](dark/register-invitation.html). Invitations still require a username
+and first passkey; the login alternative is scoped to existing accounts in this
+proposal. No accounts, sessions, tokens or credentials are created or consumed.
+Actions load authored local HTMX fragments with `hx-params="none"`; entered
+form values are not transmitted. All assets remain local, with no custom script.
+
+Screenshots: [light dropdown](register-dropdown-desktop.png),
+[dark dropdown](dark/register-dropdown-desktop.png),
+[mobile dropdown](register-dropdown-mobile.png),
+[dark mobile dropdown](dark/register-dropdown-mobile.png),
+[one-time login](login-once-desktop.png),
+[dark one-time login](dark/login-once-desktop.png),
+[mobile login](login-once-mobile.png),
+[dark mobile login](dark/login-once-mobile.png).
+
+Verification: headless Brave/Chromium rendered both full pages in both themes
+at 320, 390, 768 and 1440 pixels (16 layout cases). Checks exercised the native
+dropdown with Enter/Tab, required-field validation, switching both ways,
+enrollment and login success fixtures, unavailable links and matching theme
+navigation. Every tested state retained one primary heading, loaded assets and
+no page-level horizontal overflow. No console/page/CSP errors, HTTP failures,
+external requests or transmitted form values occurred. Twelve desktop/mobile
+screenshots were saved and visually reviewed. Parent/component whitespace
+checks passed. No Go checks or live WebAuthn/backend authentication ran because
+only mockup files and documentation changed. Nothing was published or deployed.
 
 ## Account identity and alignment proposal
 
