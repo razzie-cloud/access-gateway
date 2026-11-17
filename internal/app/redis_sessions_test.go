@@ -438,7 +438,7 @@ func TestRedisFailureReturns503WithoutIssuingCookies(t *testing.T) {
 		{"GET", "/api/me"}, {"POST", "/api/logout"}, {"POST", "/ui/logout"},
 		{"POST", "/ui/users"}, {"POST", "/ui/links"}, {"GET", "/auth/authorize?flow=" + flow},
 		{"GET", "/ui/admin"},
-		{"GET", "/ui/activity"}, {"POST", "/ui/devices/rename"}, {"POST", "/ui/devices/remove"}, {"POST", "/ui/sessions/remove"},
+		{"GET", "/ui/activity"}, {"POST", "/ui/devices/rename"}, {"POST", "/ui/devices/remove"}, {"POST", "/ui/sessions/remove"}, {"POST", "/ui/sessions/apps/remove"},
 	} {
 		w := request(s, tc.method, tc.path, `{}`, "parent")
 		assert.Equal(t, 503, w.Code, tc.path)

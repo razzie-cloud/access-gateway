@@ -225,6 +225,64 @@ document.addEventListener("htmx:afterSettle", event => {
   }
 });
 
+// HTMX submits real session forms; this bridge supplies selection state, native
+// confirmation and focus after the server refreshes the activity group.
+(() => {
+  let confirmation;
+  const requests = new WeakMap();
+  function updateSelection(form) {
+    const button = form.querySelector(".delete-apps");
+    if (!button) return;
+    const count = form.querySelectorAll('input[name="session_id"]:checked').length;
+    button.disabled = count === 0;
+    form.querySelector("[data-selection-count]").textContent = count ? `(${count})` : "";
+  }
+  document.addEventListener("change", event => {
+    const form = event.target.closest(".session-app-form");
+    if (form) updateSelection(form);
+  });
+  document.addEventListener("htmx:confirm", event => {
+    const form = event.detail.elt.closest("[data-gateway-delete]");
+    if (!form) return;
+    const dialog = document.getElementById("delete-session-dialog");
+    if (!dialog) return; // Retain HTMX's built-in confirmation fallback.
+    event.preventDefault();
+    confirmation = { form, issue: event.detail.issueRequest };
+    dialog.querySelector("[data-delete-device]").textContent = form.dataset.deviceName;
+    dialog.querySelector("[data-delete-account]").textContent = form.dataset.username;
+    const count = Number(form.dataset.appCount);
+    dialog.querySelector("[data-delete-apps]").textContent = count ? `all ${count} of its app sessions` : "the gateway login";
+    dialog.showModal();
+    dialog.querySelector("[data-cancel-session-delete]").focus();
+  });
+  document.addEventListener("click", event => {
+    if (!event.target.closest("[data-confirm-session-delete], [data-cancel-session-delete]")) return;
+    const pending = confirmation;
+    confirmation = null;
+    event.target.closest("dialog").close();
+    if (event.target.closest("[data-confirm-session-delete]") && pending?.form.isConnected) pending.issue(true);
+  });
+  document.addEventListener("close", event => {
+    // close is queued: a quick reopen may already own a new confirmation.
+    if (event.target.id === "delete-session-dialog" && !event.target.open) confirmation = null;
+  }, true);
+  document.addEventListener("htmx:beforeRequest", event => {
+    const form = event.detail.elt.closest(".session-app-form, [data-gateway-delete]");
+    if (!form || !form.contains(document.activeElement)) return;
+    const row = form.closest("[data-gateway-session]");
+    requests.set(event.detail.xhr, { row: row.id, next: row.nextElementSibling?.id, apps: form.matches(".session-app-form") });
+  });
+  document.addEventListener("htmx:afterSettle", event => {
+    event.detail.target.querySelectorAll?.(".session-app-form").forEach(updateSelection);
+    const focus = requests.get(event.detail.xhr);
+    requests.delete(event.detail.xhr);
+    if (!focus || document.activeElement !== document.body) return;
+    const row = document.getElementById(focus.row) || document.getElementById(focus.next);
+    const target = (focus.apps && row?.querySelector('input[type="checkbox"]:not(:disabled)')) || row?.querySelector(".session-trash:not(:disabled)") || row || document.getElementById("refresh-sessions");
+    target?.focus({ preventScroll: true });
+  });
+})();
+
 // Orient navigation within long pages and after server-rendered HTMX updates.
 (() => {
   let highlighted, timeout;

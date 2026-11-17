@@ -38,6 +38,7 @@ type sessionStore interface {
 	getAppAuth(context.Context, string, string) (string, bool, error)
 	ListSessions(context.Context) ([]sessionSummary, error)
 	DeleteSession(context.Context, string, string) error
+	DeleteAppSessions(context.Context, []string) error
 	Close() error
 }
 

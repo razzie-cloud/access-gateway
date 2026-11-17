@@ -39,6 +39,7 @@ func (s *Server) routes() {
 	handle("/ui/devices/rename", s.handleRenameDevice)
 	handle("/ui/devices/remove", s.handleRemoveDevice)
 	handle("/ui/sessions/remove", s.handleRemoveSession)
+	handle("/ui/sessions/apps/remove", s.handleRemoveAppSessions)
 	handle("/ui/links", s.handleCreateLink)
 	handle("/ui/registration-options", s.handleRegistrationOptions)
 	handle("/ui/logout", s.handleUILogout)

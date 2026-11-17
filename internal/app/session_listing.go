@@ -108,16 +108,32 @@ func (s *redisSessions) sessionMetadata(ctx context.Context, key string) (record
 }
 
 func (s *redisSessions) DeleteSession(ctx context.Context, kind, id string) error {
-	if !validSessionID(id) || (kind != "Gateway" && kind != "Application") {
+	return s.deleteSessions(ctx, kind, []string{id})
+}
+
+func (s *redisSessions) DeleteAppSessions(ctx context.Context, ids []string) error {
+	return s.deleteSessions(ctx, "Application", ids)
+}
+
+func (s *redisSessions) deleteSessions(ctx context.Context, kind string, ids []string) error {
+	if len(ids) == 0 || (kind != "Gateway" && kind != "Application") {
 		return sessionStoreError(errors.New("invalid session reference"))
 	}
 	prefix := "auth:"
 	if kind == "Application" {
 		prefix = "app:"
 	}
-	key := s.prefix + prefix + id
-	s.cache.delete(key)
-	if err := s.client.Del(ctx, key).Err(); err != nil {
+	keys := make([]string, len(ids))
+	for i, id := range ids {
+		if !validSessionID(id) {
+			return sessionStoreError(errors.New("invalid session reference"))
+		}
+		keys[i] = s.prefix + prefix + id
+	}
+	for _, key := range keys {
+		s.cache.delete(key)
+	}
+	if err := s.client.Del(ctx, keys...).Err(); err != nil {
 		return sessionStoreError(err)
 	}
 	return nil

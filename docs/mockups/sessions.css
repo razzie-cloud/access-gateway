@@ -1,0 +1,66 @@
+/* Gateway-session grouping proposal; only used by sessions.html. */
+.sessions-workspace { max-width: none; }
+.sessions-workspace .page-heading { margin-bottom: 1.7rem; }
+.sessions-table { width: 100%; }
+.sessions-table th,.sessions-table td { vertical-align: top; }
+.sessions-table thead th:nth-child(1) { width: 24%; }
+.sessions-table thead th:nth-child(2) { width: 48%; }
+.sessions-table thead th:nth-child(3) { width: 22%; }
+.sessions-table tbody th { min-width: 150px; }
+.sessions-table .badge { margin-top: .5rem; }
+.sessions-table .login-method { font-size: .68rem; }
+.session-name { display: block; }
+.app-choices { margin: 0; padding: 0; border: 0; min-width: 0; }
+.app-chips { display: flex; flex-wrap: wrap; gap: .5rem; }
+.app-chip { display: inline-flex; align-items: center; gap: .5rem; padding: .42rem .65rem; margin: 0; border: 1px solid var(--pico-muted-border-color); border-radius: .4rem; background: var(--pico-background-color); cursor: pointer; font-size: .8rem; font-weight: 500; white-space: nowrap; }
+.app-chip input[type="checkbox"] { width: 1rem; height: 1rem; margin: 0; padding: 0; flex-shrink: 0; border-radius: .2rem; }
+.app-chip:has(input:checked) { border-color: var(--pico-primary); box-shadow: 0 0 0 1px var(--pico-primary); }
+.app-chip:has(input:focus-visible) { outline: 3px solid var(--pico-primary-focus); outline-offset: 3px; }
+.app-chip:has(input:disabled) { cursor: default; }
+.app-chip:has(input:disabled) input { display: none; }
+.delete-apps { margin-top: .8rem; font-size: .73rem; padding: .25rem 0; white-space: normal; text-align: left; }
+.delete-apps:disabled { color: var(--pico-muted-color); opacity: .7; }
+.protected-note { margin-top: .65rem; }
+.session-expiry { white-space: nowrap; }
+.gateway-action { text-align: right; }
+.icon-button { width: 38px; height: 38px; padding: .45rem; border: 1px solid transparent; background: transparent; border-radius: .4rem; }
+.icon-button:hover:enabled { background: var(--pico-background-color); border-color: var(--pico-muted-border-color); color: #a24e4e; }
+[data-theme="dark"] .icon-button:hover:enabled { color: #f1a4a7; }
+.icon-button:disabled { color: var(--pico-muted-color); opacity: .45; }
+.card-caption p { margin: 0; }
+.card-caption p+p { margin-top: .4rem; }
+.session-footnote { color: var(--pico-muted-color); font-size: .73rem; margin: .8rem .2rem 0; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+#sessions-feedback .notice { margin: 0 0 1.4rem; }
+dialog article { max-width: 540px; }
+dialog h2 { margin-bottom: 0; }
+dialog footer { display: flex; justify-content: flex-end; gap: .7rem; flex-wrap: wrap; }
+dialog p { font-size: .9rem; }
+.delete-confirm { background: #a24e4e; border-color: #a24e4e; color: #fff; }
+.delete-confirm:hover { background: #873f3f; border-color: #873f3f; }
+@media (max-width: 1100px) and (min-width: 761px) {
+  .sessions-table th,.sessions-table td { padding: 1rem .8rem; }
+}
+@media (max-width: 760px) {
+  .sessions-table { display: block; }
+  .sessions-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .sessions-table tbody { display: block; }
+  .sessions-table tr { display: grid; grid-template-columns: minmax(0,1fr) 44px; border-top: 1px solid var(--pico-muted-border-color); padding: 1rem; gap: .9rem .5rem; }
+  .sessions-table th,.sessions-table td { display: block; border: 0; padding: 0; min-width: 0; }
+  .sessions-table th { grid-column: 1; grid-row: 1; }
+  .sessions-table .gateway-action { grid-column: 2; grid-row: 1; }
+  .sessions-table .apps-cell { grid-column: 1 / -1; grid-row: 2; }
+  .apps-cell::before { content: "Apps"; display: block; font-size: .65rem; color: var(--pico-muted-color); margin-bottom: .5rem; text-transform: uppercase; letter-spacing: .07em; }
+  .sessions-table .session-expiry { grid-column: 1 / -1; grid-row: 3; font-size: .73rem; color: var(--pico-muted-color); }
+  .session-expiry::before { content: "Expires "; }
+  .session-expiry small { display: inline; font-size: inherit; margin-left: .3rem; }
+  .sessions-table .login-method { display: inline-block; margin-left: .5rem; }
+  .sessions-table th:not(:has(.badge)) .login-method { margin-left: 0; display: block; }
+  .delete-apps { min-height: 36px; margin-top: .45rem; }
+  dialog { padding: 1rem; }
+  dialog article { padding: 1.25rem; }
+  dialog article>header,dialog article>footer { margin-inline: -1.25rem; padding-inline: 1.25rem; }
+  dialog article>header { margin-top: -1.25rem; }
+  dialog article>footer { margin-bottom: -1.25rem; }
+  dialog footer button { width: 100%; white-space: normal; }
+}

@@ -364,7 +364,7 @@ nav[aria-label="breadcrumb"] li:last-child a { color: var(--pico-color); }
 .workspace,.public-workspace { overflow-wrap: anywhere; }
 .page-heading>div>small:first-child { display: block; margin-bottom: .5rem; font-size: .68rem; font-weight: 700; letter-spacing: .13em; color: var(--pico-muted-color); }
 
-#sessions table { min-width: 48rem; }
+
 .aside-card button { min-width: 0; white-space: normal; }
 @media(max-width:600px) { .topbar>.badge { display: none; } }
 
@@ -431,4 +431,61 @@ nav[aria-label="breadcrumb"] li:last-child a { color: var(--pico-color); }
  .sidebar-signout button { width: auto; font-size: .77rem; padding: .4rem .65rem; }
  .sidebar-signout small { margin: 0; }
  #devices>.section-heading { flex-wrap: wrap; }
+}
+
+/* One row per gateway login, with independently selectable app sessions. */
+#sessions { --session-danger: #a24e4e; }
+#sessions>.section-heading { flex-wrap: wrap; }
+.sessions-table { width: 100%; }
+.sessions-table thead th:first-child { width: 24%; }
+.sessions-table thead th:nth-child(2) { width: 46%; }
+.sessions-table form { margin: 0; }
+.sessions-table .badge { margin-top: .5rem; }
+.session-app-form,.app-choices { min-width: 0; }
+.app-choices { margin: 0; padding: 0; border: 0; }
+.app-chips { display: flex; flex-wrap: wrap; gap: .5rem; }
+.app-chip { display: inline-flex; align-items: center; gap: .5rem; max-width: 100%; margin: 0; padding: .42rem .65rem; border: 1px solid var(--pico-muted-border-color); border-radius: .4rem; background: var(--pico-background-color); font-size: .78rem; font-weight: 500; cursor: pointer; }
+.app-chip span { min-width: 0; overflow-wrap: anywhere; }
+.app-chip input[type="checkbox"] { flex-shrink: 0; width: 1rem; height: 1rem; margin: 0; padding: 0; border-radius: .2rem; }
+.app-chip:has(input:checked) { border-color: var(--pico-primary); box-shadow: 0 0 0 1px var(--pico-primary); }
+.app-chip:has(input:focus-visible) { outline: 3px solid var(--pico-primary-focus); outline-offset: 3px; }
+.app-chip:has(input:disabled) { cursor: default; }
+.session-app-form:has(.protected-note) .app-chip input { display: none; }
+.delete-apps { color: var(--session-danger); width: auto; justify-content: flex-start; margin-top: .6rem; padding: .25rem 0; font-size: .73rem; white-space: normal; text-align: left; }
+#sessions .delete-apps:disabled { color: var(--pico-muted-color); opacity: .7; }
+.protected-note { margin-top: .65rem; }
+.session-expiry { white-space: nowrap; }
+.gateway-action { text-align: right; }
+.session-trash { color: var(--session-danger); width: 38px; height: 38px; padding: .45rem; border: 1px solid transparent; background: transparent; border-radius: .4rem; }
+.session-trash:hover:enabled { color: var(--session-danger); background: var(--pico-background-color); border-color: var(--pico-muted-border-color); }
+.session-trash:disabled { color: var(--pico-muted-color); opacity: .45; }
+#sessions .card-caption p { margin: 0; }
+#sessions .card-caption p+p { margin-top: .4rem; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+#delete-session-dialog article { max-width: 540px; }
+#delete-session-dialog h2 { margin: 0; }
+#delete-session-dialog p { font-size: .9rem; }
+#delete-session-dialog footer { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: .7rem; }
+.session-delete-confirm { color: #fff; background: #a24e4e; border-color: #a24e4e; }
+.session-delete-confirm:hover { color: #fff; background: #873f3f; border-color: #873f3f; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) #sessions { --session-danger: #f1a4a7; } }
+@media (max-width: 760px) {
+ .sessions-table,.sessions-table tbody { display: block; }
+ .sessions-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+ .sessions-table tr[data-gateway-session] { display: grid; grid-template-columns: minmax(0,1fr) 44px; border-top: 1px solid var(--pico-muted-border-color); padding: 1rem; gap: .9rem .5rem; }
+ .sessions-table th,.sessions-table td { display: block; min-width: 0; border: 0; padding: 0; }
+ .sessions-table th { grid-column: 1; grid-row: 1; }
+ .sessions-table .gateway-action { grid-column: 2; grid-row: 1; }
+ .sessions-table .apps-cell { grid-column: 1 / -1; grid-row: 2; }
+ .apps-cell::before { content: "Apps"; display: block; font-size: .65rem; color: var(--pico-muted-color); margin-bottom: .5rem; text-transform: uppercase; letter-spacing: .07em; }
+ .sessions-table .session-expiry { grid-column: 1 / -1; grid-row: 3; font-size: .73rem; color: var(--pico-muted-color); }
+ .session-expiry::before { content: "Expires "; }
+ .session-expiry small { display: inline; font-size: inherit; margin-left: .3rem; }
+ .sessions-table .delete-apps { min-height: 36px; }
+ #delete-session-dialog { padding: 1rem; }
+ #delete-session-dialog article { padding: 1.25rem; }
+ #delete-session-dialog article>header,#delete-session-dialog article>footer { margin-inline: -1.25rem; padding-inline: 1.25rem; }
+ #delete-session-dialog article>header { margin-top: -1.25rem; }
+ #delete-session-dialog article>footer { margin-bottom: -1.25rem; }
+ #delete-session-dialog footer button { width: 100%; white-space: normal; }
 }

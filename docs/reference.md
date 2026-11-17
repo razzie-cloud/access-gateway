@@ -177,13 +177,32 @@ identify registered passkeys; passkey sessions record the device used to sign
 in, and application sessions inherit that association. Link-login sessions are
 explicitly labeled without a device association.
 
+The sessions table shows one row per gateway login, with its application sessions
+in the **Apps** column. Separate logins using the same passkey remain separate
+rows. Apps show their hostname (including its port when present); the tooltip gives
+the exact origin and expiry. Multiple sessions for the same origin receive
+separate numbered chips so each can be selected independently. The session count
+counts gateway logins only.
+
 Open a device's **Manage** disclosure to **Rename** it at any time, including
-the current device, or remove an unused device. **Remove session**
-ends another session; removing a gateway session also revokes its application
-sessions. This browser's session and its application sessions are protected;
+the current device, or remove an unused device. Select app-session checkboxes
+and choose **Delete selected apps** to revoke only those app sessions. The gateway
+login stays active and may automatically sign the browser back into those apps.
+The row's trash button opens a confirmation dialog; **Delete gateway session**
+revokes the gateway login and all its application sessions. Cancel or Escape
+preserves them. This browser's session and its application sessions are protected;
 use **Sign out** to end them. A device can be removed once all its sessions have
 ended, preventing future logins with that passkey. Login completion and device
 removal lock the credential row so a concurrent login cannot bypass this check.
+
+App selections post to `/ui/sessions/apps/remove` with a hashed `gateway_id` and
+one or more hashed `session_id` values. The server validates the full selection's
+ownership, parent binding and current-browser protection before deleting the
+selected app records together in a single Redis operation. A missing, foreign or
+invalid selection deletes nothing. Errors stay in the Sessions panel, retaining
+the table and selected checkboxes. Gateway deletion retains `/ui/sessions/remove`
+with `kind=Gateway` and a hashed `session_id`; its existing single-app operation
+remains available for compatibility. Session references never expose bearer tokens.
 
 Existing passkeys start as **Unnamed device** and can be renamed. Older sessions
 show **Unknown device** until the user signs in again. While those sessions are

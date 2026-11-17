@@ -57,7 +57,7 @@ func TestPostgresAdminPanel(t *testing.T) {
 	assert.Contains(t, w.Body.String(), id.String())
 	assert.Contains(t, w.Body.String(), "Pending.User")
 	assert.Contains(t, w.Body.String(), "Users (3)")
-	assert.Contains(t, w.Body.String(), "Active sessions (3)")
+	assert.Contains(t, w.Body.String(), "Active sessions (2)")
 	assert.Contains(t, w.Body.String(), testAppOrigin)
 	for _, secret := range []string{"admin-session", "member-session", appToken} {
 		assert.NotContains(t, w.Body.String(), secret)
@@ -71,8 +71,11 @@ func TestPostgresAdminPanel(t *testing.T) {
 
 func TestActivityTemplateEscapesMetadataAndHidesUsersForMembers(t *testing.T) {
 	data := viewData{
-		User:     &User{IsAdmin: true},
-		Sessions: []sessionView{{sessionSummary: sessionSummary{Username: "<script>name</script>", Origin: `<img src=x onerror="alert(1)">`}}},
+		User: &User{IsAdmin: true},
+		Sessions: []sessionView{{
+			sessionSummary: sessionSummary{Username: "<script>name</script>", Kind: "Gateway"},
+			Apps:           []appSessionView{{sessionSummary: sessionSummary{Origin: `<img src=x onerror="alert(1)">`}, Label: `<img src=x onerror="alert(1)">`}},
+		}},
 	}
 	w := httptest.NewRecorder()
 	unitServer().render(w, httptest.NewRequest("GET", "/ui/activity", nil), 200, "activity", data)

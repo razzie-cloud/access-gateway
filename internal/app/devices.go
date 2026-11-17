@@ -26,6 +26,12 @@ type sessionView struct {
 	sessionSummary
 	DeviceName string
 	Current    bool
+	Apps       []appSessionView
+}
+
+type appSessionView struct {
+	sessionSummary
+	Label string
 }
 
 func validDeviceName(name string) bool {

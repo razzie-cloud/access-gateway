@@ -121,8 +121,8 @@ func TestFrontendProtectedActivityActions(t *testing.T) {
 			{ID: 2, Username: "alice", Name: "Offline device"},
 		},
 		Sessions: []sessionView{
-			{sessionSummary: sessionSummary{ID: "current", Kind: "Gateway"}, Current: true},
-			{sessionSummary: sessionSummary{ID: "other", Kind: "Application"}},
+			{sessionSummary: sessionSummary{ID: "current", Kind: "Gateway"}, Current: true, Apps: []appSessionView{{sessionSummary: sessionSummary{ID: "current-app"}, Label: "Current app"}}},
+			{sessionSummary: sessionSummary{ID: "other", Kind: "Gateway"}, Apps: []appSessionView{{sessionSummary: sessionSummary{ID: "other-app"}, Label: "Other app"}}},
 		},
 	}
 	var page bytes.Buffer
@@ -140,6 +140,16 @@ func TestFrontendProtectedActivityActions(t *testing.T) {
 	}
 	assert.Contains(t, html, `hx-post="/ui/devices/rename"`)
 	assert.NotContains(t, html, `id="users"`)
+	checkboxes := regexp.MustCompile(`<input[^>]+type="checkbox"[^>]*>`).FindAllString(html, -1)
+	require.Len(t, checkboxes, 2)
+	assert.Contains(t, checkboxes[0], `value="current-app"`)
+	assert.Contains(t, checkboxes[0], ` disabled`)
+	assert.Contains(t, checkboxes[1], `value="other-app"`)
+	assert.NotContains(t, checkboxes[1], ` disabled`)
+	assert.Contains(t, html, `name="gateway_id" value="other"`)
+	assert.Contains(t, html, `hx-post="/ui/sessions/apps/remove"`)
+	assert.Equal(t, 2, strings.Count(html, `name="kind" value="Gateway"`))
+	assert.Contains(t, html, `id="delete-session-dialog"`)
 }
 
 func TestFrontendActivityRefreshPanels(t *testing.T) {

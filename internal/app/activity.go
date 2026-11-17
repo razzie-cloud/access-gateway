@@ -5,6 +5,8 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -61,6 +63,7 @@ func (s *Server) activity(r *http.Request, actor User) (viewData, error) {
 	}
 	cookie, _ := r.Cookie("auth") // activityActor has already authenticated it.
 	currentID := hashToken(cookie.Value)
+	var visible []sessionView
 	for _, session := range sessions {
 		if !actor.IsAdmin && session.Username != actor.Username {
 			continue
@@ -84,10 +87,64 @@ func (s *Server) activity(r *http.Request, actor User) (viewData, error) {
 				d.InUse = true
 			}
 		}
-		data.Sessions = append(data.Sessions, view)
+		visible = append(visible, view)
 	}
+	data.Sessions = groupSessionViews(visible)
 	data.Devices = devices
 	return data, nil
+}
+
+// Group by the gateway login, never by passkey or app origin. A SCAN snapshot
+// can contain an app whose parent was absent from the earlier auth scan; omit
+// it until a refresh sees both, rather than inventing a gateway row.
+func groupSessionViews(visible []sessionView) []sessionView {
+	var grouped []sessionView
+	parents := make(map[string]int)
+	for _, session := range visible {
+		if session.Kind == "Gateway" {
+			parents[session.ID] = len(grouped)
+			grouped = append(grouped, session)
+		}
+	}
+	for _, session := range visible {
+		index, ok := parents[session.ParentID]
+		if session.Kind != "Application" || !ok || grouped[index].Username != session.Username {
+			continue
+		}
+		label := session.Origin
+		if origin, err := url.Parse(session.Origin); err == nil && origin.Host != "" {
+			label = origin.Host
+		}
+		grouped[index].Apps = append(grouped[index].Apps, appSessionView{sessionSummary: session.sessionSummary, Label: label})
+	}
+	for i := range grouped {
+		apps := grouped[i].Apps
+		sort.Slice(apps, func(i, j int) bool {
+			if apps[i].Origin != apps[j].Origin {
+				return apps[i].Origin < apps[j].Origin
+			}
+			return apps[i].ID < apps[j].ID
+		})
+		for start := 0; start < len(apps); {
+			end := start + 1
+			for end < len(apps) && apps[end].Origin == apps[start].Origin {
+				end++
+			}
+			if end-start > 1 {
+				for j := start; j < end; j++ {
+					apps[j].Label += " · " + strconv.Itoa(j-start+1)
+				}
+			}
+			start = end
+		}
+	}
+	sort.Slice(grouped, func(i, j int) bool {
+		if grouped[i].Username != grouped[j].Username {
+			return grouped[i].Username < grouped[j].Username
+		}
+		return grouped[i].ID < grouped[j].ID
+	})
+	return grouped
 }
 
 func (s *Server) renderActivity(w http.ResponseWriter, r *http.Request, actor User, message string) {
@@ -222,4 +279,68 @@ func (s *Server) handleRemoveSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.writeError(w, r, 404, "Session not found")
+}
+
+func (s *Server) handleRemoveAppSessions(w http.ResponseWriter, r *http.Request) {
+	actor, ok := s.activityActor(w, r, http.MethodPost)
+	if !ok {
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		s.writeError(w, r, 400, "Invalid form")
+		return
+	}
+	parentID, ids := r.PostForm.Get("gateway_id"), r.PostForm["session_id"]
+	if !validSessionID(parentID) || len(ids) == 0 {
+		s.writeError(w, r, 400, "Select at least one app session")
+		return
+	}
+	selected := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		if !validSessionID(id) || selected[id] {
+			s.writeError(w, r, 400, "Invalid session")
+			return
+		}
+		selected[id] = true
+	}
+	sessions, err := s.sessions.ListSessions(r.Context())
+	if err != nil {
+		logging.Fail(r.Context(), slog.LevelError, "redis", err)
+		s.writeError(w, r, 503, "Session storage unavailable")
+		return
+	}
+	var parent *sessionSummary
+	for _, session := range sessions {
+		if session.Kind == "Gateway" && session.ID == parentID && (actor.IsAdmin || session.Username == actor.Username) {
+			parent = &session
+			break
+		}
+	}
+	if parent == nil {
+		s.writeError(w, r, 404, "Session not found")
+		return
+	}
+	cookie, _ := r.Cookie("auth")
+	if parentID == hashToken(cookie.Value) {
+		s.writeError(w, r, 409, "This browser’s sessions are in use. Use Sign out to end them.")
+		return
+	}
+	// Authorize the entire selection before deleting anything. Records are
+	// immutable, and all selected keys are deleted together in one Redis DEL.
+	for _, session := range sessions {
+		if session.Kind == "Application" && session.ParentID == parentID && session.Username == parent.Username {
+			delete(selected, session.ID)
+		}
+	}
+	if len(selected) != 0 {
+		s.writeError(w, r, 404, "App session not found. Refresh sessions and try again.")
+		return
+	}
+	if err := s.sessions.DeleteAppSessions(r.Context(), ids); err != nil {
+		logging.Fail(r.Context(), slog.LevelError, "redis", err)
+		s.writeError(w, r, 503, "Unable to delete app sessions. Refresh sessions to check their status before retrying.")
+		return
+	}
+	logging.For(r.Context()).Info("App sessions revoked", "event", "session.revoked", "actor_user_id", userID(actor.ID), "session_kind", "Application", "session_count", len(ids))
+	s.renderActivity(w, r, actor, "App sessions deleted. The gateway session is still active.")
 }

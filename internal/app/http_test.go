@@ -30,7 +30,7 @@ func TestRoutesRejectWrongMethod(t *testing.T) {
 	for _, tc := range []struct{ method, path string }{
 		{"POST", "/"}, {"POST", "/register"}, {"POST", "/ui/state"},
 		{"POST", "/ui/admin"},
-		{"POST", "/ui/activity"}, {"GET", "/ui/devices/rename"}, {"GET", "/ui/devices/remove"}, {"GET", "/ui/sessions/remove"},
+		{"POST", "/ui/activity"}, {"GET", "/ui/devices/rename"}, {"GET", "/ui/devices/remove"}, {"GET", "/ui/sessions/remove"}, {"GET", "/ui/sessions/apps/remove"},
 		{"POST", "/api/bootstrap"}, {"POST", "/api/me"},
 		{"POST", "/forward_auth"}, {"POST", "/forward_auth/admin"}, {"POST", "/auth/authorize"},
 		{"GET", "/ui/users"}, {"GET", "/ui/links"}, {"GET", "/ui/logout"},

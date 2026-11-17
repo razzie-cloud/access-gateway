@@ -186,6 +186,13 @@ absolute registration URLs from untrusted Host or forwarded headers.
   and /ui/sessions/remove (kind, session_id): owner or admin only. Recheck access
   for each action; protect the caller's current gateway session and its app
   sessions. Device removal requires no live sessions (see locking rules above).
+- Activity groups app records under one row per gateway login, never by device
+  or origin. Counts reflect gateway logins; duplicate app origins remain separate
+  selectable records. The row trash action confirms gateway revocation. POST
+  /ui/sessions/apps/remove takes gateway_id and repeated session_id hashes;
+  validate the entire selection's ownership, parent and current-browser protection
+  before one atomic Redis DEL. Session mutation errors target sessions-feedback
+  and retain rows/selections. Keep the existing single-session endpoint compatible.
 - Session references are token hashes; never render bearer tokens or ceremony
   data. Redis listing scans only the gateway namespace and excludes app sessions
   with expired/revoked parents. Passkey auth payloads include DeviceID; link

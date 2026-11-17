@@ -7,12 +7,58 @@ Serve the **Razzie Cloud parent directory** with
 | Screen | File | Review focus |
 | --- | --- | --- |
 | Administrator overview | [index.html](index.html) | Devices and sessions beside enrollment/user creation |
+| Grouped sessions | [sessions.html](sessions.html) | One row per gateway login, selectable app sessions and gateway trash action |
 | Passkey sign-in | [login.html](login.html) | Two-column entry screen and clear primary action |
 | Registration link | [register.html](register.html) | Enrollment by default, with one-time login in a Pico split-button dropdown |
 | New-user invitation | [register-invitation.html](register-invitation.html) | Username and first passkey required to create an account |
 | Administrator access denied | [admin-denied.html](admin-denied.html) | Centered branded 403 page on a protected app hostname |
 
 [Account screenshot](index-desktop.png) · [Sign-in screenshot](login-desktop.png)
+
+## Grouped gateway sessions proposal
+
+Open [the light preview](sessions.html) or [the dark preview](dark/sessions.html).
+The overview's Sessions navigation opens this proposal. Each row represents one
+gateway login, with its device/account, app sessions and gateway expiry. App
+sessions appear as checkbox chips in the extra Apps column. Select one or more
+and choose **Delete selected apps** to remove only those sample app sessions;
+the gateway row remains. Two Files sessions under Studio laptop demonstrate
+independent selection of sessions for the same app. Removing the final app
+leaves **No app sessions**.
+
+The row's trash button opens a native confirmation dialog. **Delete gateway
+session** removes the complete sample row and its app sessions, updating the
+gateway-session count. Cancel or Escape preserves it. This browser's gateway
+and app sessions remain protected, with Sign out as its exit. The page explains
+that deleting an app session allows automatic sign-in again while its parent
+gateway session remains active. **Refresh** restores the original sample data.
+
+These are browser-local sample changes using authored HTMX receipt fragments
+and the mockup-only `sessions.js`; no session API is contacted or data persisted.
+Requests use `hx-params="none"`. The historical overview retains its old table
+for comparison. Production now implements this grouping in the existing activity
+panel, using real app hostnames and server-validated deletion. See
+[managing sessions](../reference.md#manage-devices-and-sessions) for its behavior.
+
+Screenshots: [light desktop](sessions-desktop.png),
+[dark desktop](dark/sessions-desktop.png), [light mobile](sessions-mobile.png),
+[dark mobile](dark/sessions-mobile.png), [selected app](sessions-selected-desktop.png),
+[dark selected app](dark/sessions-selected-desktop.png),
+[gateway confirmation](sessions-delete-desktop.png),
+[dark confirmation](dark/sessions-delete-desktop.png),
+[mobile confirmation](sessions-delete-mobile.png),
+[dark mobile confirmation](dark/sessions-delete-mobile.png).
+
+Verification: Brave/Chromium checked both themes at 320, 390, 768 and 1440 pixels
+(eight layout cases). All cases exercised keyboard checkbox selection, individual
+and multiple app deletion, empty apps, gateway confirmation/cancellation/Escape,
+focus return, current-browser protection, count updates, sample reset and theme
+round trips. One primary heading, loaded images and no page overflow passed.
+There were no page/console/CSP errors, failed HTTP responses or external HTTP
+requests; all 184 HTTP requests were local GETs without query/form values.
+Ten screenshots were captured and visually reviewed. Relative-reference and Git
+whitespace checks passed. No Go build/tests or live authentication ran for these
+static-only changes. Nothing was published or deployed.
 
 ## Registration link: one-time login proposal
 

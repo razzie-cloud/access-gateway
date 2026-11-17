@@ -126,3 +126,16 @@ func (m memorySessionStore) DeleteSession(_ context.Context, kind, id string) er
 	}
 	return nil
 }
+
+func (m memorySessionStore) DeleteAppSessions(_ context.Context, ids []string) error {
+	m.mem.mu.Lock()
+	defer m.mem.mu.Unlock()
+	for token := range m.mem.apps {
+		for _, id := range ids {
+			if hashToken(token) == id {
+				delete(m.mem.apps, token)
+			}
+		}
+	}
+	return nil
+}

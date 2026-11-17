@@ -55,7 +55,7 @@ func TestDeviceNameValidation(t *testing.T) {
 func TestActivityAndChangesRequireAuthenticationAndOrigin(t *testing.T) {
 	s := unitServer()
 	assert.Equal(t, 401, request(s, "GET", "/ui/activity", "", "").Code)
-	for _, path := range []string{"/ui/devices/rename", "/ui/devices/remove", "/ui/sessions/remove"} {
+	for _, path := range []string{"/ui/devices/rename", "/ui/devices/remove", "/ui/sessions/remove", "/ui/sessions/apps/remove"} {
 		assert.Equal(t, 401, request(s, "POST", path, "", "").Code)
 		r := httptest.NewRequest("POST", path, strings.NewReader(""))
 		r.Header.Set("Origin", "https://other.example")
@@ -106,7 +106,7 @@ func TestPostgresActivityOwnershipAndRemoval(t *testing.T) {
 	w := request(s, "GET", "/ui/activity", "", "alice-session")
 	require.Equal(t, 200, w.Code, w.Body.String())
 	assert.Contains(t, w.Body.String(), "Devices (2)")
-	assert.Contains(t, w.Body.String(), "Active sessions (4)")
+	assert.Contains(t, w.Body.String(), "Active sessions (2)")
 	assert.Contains(t, w.Body.String(), "This device")
 	assert.Contains(t, w.Body.String(), "This browser")
 	assert.NotContains(t, w.Body.String(), "Bob tablet")
@@ -115,7 +115,7 @@ func TestPostgresActivityOwnershipAndRemoval(t *testing.T) {
 	assert.NotContains(t, w.Body.String(), hashToken("bob-session"))
 	w = request(s, "GET", "/ui/activity", "", "admin-session")
 	assert.Contains(t, w.Body.String(), "Devices (4)")
-	assert.Contains(t, w.Body.String(), "Active sessions (6)")
+	assert.Contains(t, w.Body.String(), "Active sessions (4)")
 	assert.Contains(t, w.Body.String(), "Bob tablet")
 	for _, path := range []string{"/ui/devices/rename", "/ui/devices/remove"} {
 		body := url.Values{"device_id": {fmt.Sprint(bobDevice)}, "device_name": {"stolen"}}.Encode()
