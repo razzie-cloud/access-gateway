@@ -172,7 +172,21 @@ a temporary static outline. The workspace fills the available frame with equal
 left/right padding. PicoCSS and HTMX are embedded locally; no frontend build is needed.
 
 Every signed-in user can view their own devices and active gateway/application
-sessions. Administrators see all users, UUIDs, devices and sessions. Device names
+sessions. Administrators have a user dropdown beside Devices and Active sessions;
+each defaults to the signed-in administrator. Select one account or **All users**
+independently for each list. Heading counters reflect the displayed records.
+Refresh retains the selected account and preserves the other panel's drafts and
+app selections. Device/session changes and user creation retain both selections;
+a fresh account-page load without filter parameters defaults to the current user.
+The Users table continues to list all accounts and UUIDs.
+
+Filtering runs on the server. Admin activity requests accept `devices_user` and
+`sessions_user` as account UUIDs or the literal `all`; omitted values mean the
+current administrator. Invalid admin selections return 400 without replacing
+the existing panel. Regular users never receive filter controls and supplied
+scope parameters cannot expand their own-account visibility. The filter is
+view state, not action authority: all mutations still check the current role,
+ownership and current-browser/device protection separately. Device names
 identify registered passkeys; passkey sessions record the device used to sign
 in, and application sessions inherit that association. Link-login sessions are
 explicitly labeled without a device association.

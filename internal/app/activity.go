@@ -14,6 +14,50 @@ import (
 	"github.com/razzie-cloud/access-gateway/internal/logging"
 )
 
+var errActivityUserFilter = errors.New("invalid activity user filter")
+
+type activityUserOption struct {
+	Value, Label string
+}
+
+type activityUserFilter struct {
+	Panel, Value, Label string
+	Options             []activityUserOption
+	username            string // Empty only for the explicit all-users selection.
+}
+
+func newActivityUserFilter(panel, value string, actor User, users []adminUser) (*activityUserFilter, error) {
+	if value == "" {
+		id, err := uuid.FromBytes(actor.ID)
+		if err != nil {
+			return nil, err
+		}
+		value = id.String()
+	}
+	filter := &activityUserFilter{Panel: panel, Value: value, Options: []activityUserOption{{Value: "all", Label: "All users"}}}
+	for _, user := range users {
+		label := user.Username
+		if user.Username == actor.Username {
+			label += " (you)"
+		}
+		filter.Options = append(filter.Options, activityUserOption{Value: user.UUID, Label: label})
+		if user.UUID == value {
+			filter.Label, filter.username = label, user.Username
+		}
+	}
+	if value == "all" {
+		filter.Label = "All users"
+	}
+	if filter.Label == "" {
+		return nil, errActivityUserFilter
+	}
+	return filter, nil
+}
+
+func (f *activityUserFilter) includes(username string) bool {
+	return f == nil || f.Value == "all" || f.username == username
+}
+
 func (s *Server) activityActor(w http.ResponseWriter, r *http.Request, method string) (User, bool) {
 	if r.Method != method {
 		s.methodNotAllowed(w, r, method)
@@ -52,6 +96,14 @@ func (s *Server) activity(r *http.Request, actor User) (viewData, error) {
 			}
 			data.AdminUsers = append(data.AdminUsers, adminUser{User: user, UUID: id.String()})
 		}
+		data.DevicesFilter, err = newActivityUserFilter("devices", r.FormValue("devices_user"), actor, data.AdminUsers)
+		if err != nil {
+			return data, err
+		}
+		data.SessionsFilter, err = newActivityUserFilter("sessions", r.FormValue("sessions_user"), actor, data.AdminUsers)
+		if err != nil {
+			return data, err
+		}
 	}
 	devices, err := s.listDevices(r.Context(), actor)
 	if err != nil {
@@ -87,10 +139,16 @@ func (s *Server) activity(r *http.Request, actor User) (viewData, error) {
 				d.InUse = true
 			}
 		}
-		visible = append(visible, view)
+		if data.SessionsFilter.includes(session.Username) {
+			visible = append(visible, view)
+		}
 	}
 	data.Sessions = groupSessionViews(visible)
-	data.Devices = devices
+	for _, device := range devices {
+		if data.DevicesFilter.includes(device.Username) {
+			data.Devices = append(data.Devices, device)
+		}
+	}
 	return data, nil
 }
 
@@ -158,6 +216,10 @@ func (s *Server) renderActivity(w http.ResponseWriter, r *http.Request, actor Us
 	}
 	data, err := s.activity(r, actor)
 	if err != nil {
+		if errors.Is(err, errActivityUserFilter) {
+			s.writeError(w, r, http.StatusBadRequest, "Invalid activity user. Refresh the page and choose an account.")
+			return
+		}
 		status := http.StatusInternalServerError
 		if errors.Is(err, errSessionStore) {
 			status = http.StatusServiceUnavailable

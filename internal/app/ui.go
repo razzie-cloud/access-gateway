@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -39,6 +40,9 @@ type viewData struct {
 	AdminUsers        []adminUser
 	Sessions          []sessionView
 	Devices           []deviceView
+	DevicesFilter     *activityUserFilter
+	SessionsFilter    *activityUserFilter
+	ActivityQuery     string
 }
 
 type adminUser struct {
@@ -94,6 +98,14 @@ func (s *Server) state(r *http.Request) (viewData, error) {
 		return data, err
 	}
 	data.User = &user
+	// Only activity scope parameters belong in the initial fragment request.
+	query := make(url.Values)
+	for _, name := range []string{"devices_user", "sessions_user"} {
+		if value := r.FormValue(name); value != "" {
+			query.Set(name, value)
+		}
+	}
+	data.ActivityQuery = query.Encode()
 	if user.IsAdmin {
 		data.Users, err = s.listUsers(r.Context())
 		if err != nil {

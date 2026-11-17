@@ -83,7 +83,7 @@
     {{if or .Message .Error}}{{template "message" .}}{{end}}
     <div class="content-columns">
       <section class="stack" aria-label="Account activity">
-        <div id="activity-data" class="stack" hx-get="/ui/activity" hx-trigger="load" aria-live="polite"><p aria-busy="true">Loading devices and sessions…</p></div>
+        <div id="activity-data" class="stack" hx-include="#devices-user-value, #sessions-user-value" hx-get="/ui/activity{{if .ActivityQuery}}?{{.ActivityQuery}}{{end}}" hx-trigger="load" aria-live="polite"><p aria-busy="true">Loading devices and sessions…</p></div>
       </section>
       <div class="stack">
         <article class="aside-card" id="registration" data-navigation-target><div class="aside-title"><p class="eyebrow">Device enrollment</p><h2>Device registration links</h2><p class="muted">Create a link, then open it or scan its QR code on the device you want to register.</p></div>
@@ -95,7 +95,7 @@
           </form><div id="link-result" aria-live="polite"></div>
         </article>
         {{if .User.IsAdmin}}<article class="aside-card"><div class="aside-title"><p class="eyebrow">Administration</p><h2>Create a user</h2><p class="muted">New users can sign in after registering their first device through a link you generate for them.</p></div>
-          <form hx-post="/ui/users" hx-target="#user-result" hx-disabled-elt="find button"><label>Username<input name="username" maxlength="64" pattern="[A-Za-z0-9_.\-]{1,64}" title="Use 1–64 letters (A–Z, a–z), digits, underscores, hyphens or periods." autocapitalize="none" spellcheck="false" autocomplete="off" required>{{template "username-rules"}}</label><button class="secondary outline" type="submit">{{template "icon-plus"}}Create user</button></form><div id="user-result" aria-live="polite"></div>
+          <form hx-post="/ui/users" hx-include="#devices-user-value, #sessions-user-value" hx-target="#user-result" hx-disabled-elt="find button"><label>Username<input name="username" maxlength="64" pattern="[A-Za-z0-9_.\-]{1,64}" title="Use 1–64 letters (A–Z, a–z), digits, underscores, hyphens or periods." autocapitalize="none" spellcheck="false" autocomplete="off" required>{{template "username-rules"}}</label><button class="secondary outline" type="submit">{{template "icon-plus"}}Create user</button></form><div id="user-result" aria-live="polite"></div>
         </article>{{end}}
       </div>
     </div>
@@ -157,8 +157,16 @@
 {{end}}
 {{end}}
 
+{{define "activity-user-filter"}}{{with .}}
+<details class="dropdown user-filter"><summary id="{{.Panel}}-user-filter" aria-label="Filter {{.Panel}} by user: {{.Label}}">{{template "icon-user"}}<span>{{.Label}}</span><svg class="icon filter-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary><ul aria-label="Choose a user for {{.Panel}}">
+{{$filter := .}}{{range .Options}}<li><a href="/?{{$filter.Panel}}_user={{.Value}}" hx-get="/ui/activity?{{$filter.Panel}}_user={{.Value}}" hx-include="{{if eq $filter.Panel "devices"}}#sessions-user-value{{else}}#devices-user-value{{end}}" hx-target="#{{$filter.Panel}}" hx-swap="outerHTML" data-activity-filter{{if eq .Value $filter.Value}} aria-current="true"{{end}}><span>{{.Label}}</span><span class="choice-check" aria-hidden="true">✓</span></a></li>{{end}}
+</ul></details>
+{{end}}{{end}}
+
+{{define "icon-user"}}<svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3"/><path d="M5 21v-3a7 7 0 0 1 14 0v3"/></svg>{{end}}
+
 {{define "activity-devices"}}
-<article class="table-card" id="devices" data-navigation-target><div class="section-heading"><div><h2>Devices ({{len .Devices}})</h2><p class="muted">The passkeys that open your cloud.</p></div><button class="text-button" type="button" id="refresh-devices" data-activity-refresh aria-label="Refresh devices" hx-get="/ui/activity" hx-target="#devices" hx-swap="outerHTML" hx-disabled-elt="this">{{template "icon-refresh"}}Refresh</button></div><div id="devices-feedback" aria-live="polite"></div>
+<article class="table-card" id="devices" data-navigation-target><div class="section-heading"><div><h2>Devices <span class="badge">{{len .Devices}}</span></h2><p class="muted">The passkeys that open your cloud.</p></div><div class="activity-controls">{{if .User.IsAdmin}}{{template "activity-user-filter" .DevicesFilter}}{{end}}<button class="text-button" type="button" id="refresh-devices" data-activity-refresh aria-label="Refresh devices" hx-get="/ui/activity" hx-target="#devices" hx-swap="outerHTML" hx-disabled-elt="this">{{template "icon-refresh"}}Refresh</button></div></div>{{with .DevicesFilter}}<input type="hidden" id="devices-user-value" name="devices_user" value="{{.Value}}">{{end}}<div id="devices-feedback" aria-live="polite"></div>
 {{range .Devices}}<div class="device-row">
   <span class="file-icon">{{template "icon-laptop"}}</span><div class="device-info"><p>{{.Name}}</p><small>{{if $.User.IsAdmin}}{{.Username}} · {{end}}Registered {{.CreatedAt.UTC.Format "2006-01-02 15:04:05"}} UTC</small></div>
   <span class="badge{{if .Current}} green{{end}}">{{if .Current}}This device{{else if .InUse}}In use{{else}}Not in use{{end}}</span>
@@ -171,7 +179,7 @@
 {{end}}
 
 {{define "activity-sessions"}}
-<article class="table-card" id="sessions" data-navigation-target><div class="section-heading"><div><h2>Active sessions ({{len .Sessions}})</h2><p class="muted">Each row is a gateway login with its connected apps.</p></div><button class="text-button" type="button" id="refresh-sessions" data-activity-refresh aria-label="Refresh sessions" hx-get="/ui/activity" hx-target="#sessions" hx-swap="outerHTML" hx-disabled-elt="this">{{template "icon-refresh"}}Refresh</button></div><div id="sessions-feedback" aria-live="polite"></div>
+<article class="table-card" id="sessions" data-navigation-target><div class="section-heading"><div><h2>Active sessions <span class="badge">{{len .Sessions}}</span></h2><p class="muted">Each row is a gateway login with its connected apps.</p></div><div class="activity-controls">{{if .User.IsAdmin}}{{template "activity-user-filter" .SessionsFilter}}{{end}}<button class="text-button" type="button" id="refresh-sessions" data-activity-refresh aria-label="Refresh sessions" hx-get="/ui/activity" hx-target="#sessions" hx-swap="outerHTML" hx-disabled-elt="this">{{template "icon-refresh"}}Refresh</button></div></div>{{with .SessionsFilter}}<input type="hidden" id="sessions-user-value" name="sessions_user" value="{{.Value}}">{{end}}<div id="sessions-feedback" aria-live="polite"></div>
 <div class="overflow-auto"><table class="sessions-table"><thead><tr><th scope="col">Device{{if .User.IsAdmin}} / account{{end}}</th><th scope="col">Apps</th><th scope="col">Expires (UTC)</th><th scope="col"><span class="sr-only">Delete gateway session</span></th></tr></thead><tbody>
 {{range .Sessions}}{{$session := .}}<tr id="session-{{.ID}}" data-gateway-session tabindex="-1"><th scope="row">{{.DeviceName}}{{if $.User.IsAdmin}}<small>{{.Username}}</small>{{end}}{{if .Current}}<span class="badge green">This browser</span>{{end}}{{if or .LinkLogin .DeviceID}}<small class="login-method">{{if .LinkLogin}}No passkey used{{else}}Passkey login{{end}}</small>{{end}}</th>
 <td class="apps-cell">{{if .Apps}}<form class="session-app-form" method="post" action="/ui/sessions/apps/remove" hx-post="/ui/sessions/apps/remove" hx-target="#activity-data" hx-disabled-elt="find input, find button"><input type="hidden" name="gateway_id" value="{{.ID}}"><fieldset class="app-choices" aria-label="App sessions for {{.DeviceName}}"><div class="app-chips">{{range .Apps}}<label class="app-chip" title="{{.Origin}} · Expires {{.ExpiresAt.UTC.Format "2006-01-02 15:04:05"}} UTC"><input type="checkbox" name="session_id" value="{{.ID}}" aria-label="Select {{.Label}} session for {{$session.DeviceName}}"{{if $session.Current}} disabled{{end}}><span>{{.Label}}</span></label>{{end}}</div></fieldset>{{if .Current}}<small class="protected-note">Use Sign out to end this browser’s sessions.</small>{{else}}<button class="text-button danger delete-apps" type="submit" disabled>Delete selected apps <span data-selection-count></span></button>{{end}}</form>{{else}}<span class="muted no-apps">No app sessions</span>{{end}}</td>
@@ -183,7 +191,7 @@
 {{end}}
 
 {{define "activity-users"}}
-{{if .User.IsAdmin}}<article class="table-card" id="users" data-navigation-target><div class="section-heading"><h2>Users ({{len .AdminUsers}})</h2><button class="text-button" type="button" id="refresh-users" data-activity-refresh aria-label="Refresh users" hx-get="/ui/activity" hx-target="#users" hx-swap="outerHTML" hx-disabled-elt="this">{{template "icon-refresh"}}Refresh</button></div><div id="users-feedback" aria-live="polite"></div><div class="overflow-auto"><table><thead><tr><th scope="col">Account / UUID</th><th scope="col">Role</th></tr></thead><tbody>{{range .AdminUsers}}<tr><th scope="row">{{.Username}}<small><code>{{.UUID}}</code></small></th><td><span class="badge{{if .IsAdmin}} green{{end}}">{{if .IsAdmin}}Administrator{{else}}User{{end}}</span></td></tr>{{else}}<tr><td colspan="2">No users found.</td></tr>{{end}}</tbody></table></div></article>{{end}}
+{{if .User.IsAdmin}}<article class="table-card" id="users" data-navigation-target><div class="section-heading"><h2>Users <span class="badge">{{len .AdminUsers}}</span></h2><button class="text-button" type="button" id="refresh-users" data-activity-refresh aria-label="Refresh users" hx-get="/ui/activity" hx-target="#users" hx-swap="outerHTML" hx-disabled-elt="this">{{template "icon-refresh"}}Refresh</button></div><div id="users-feedback" aria-live="polite"></div><div class="overflow-auto"><table><thead><tr><th scope="col">Account / UUID</th><th scope="col">Role</th></tr></thead><tbody>{{range .AdminUsers}}<tr><th scope="row">{{.Username}}<small><code>{{.UUID}}</code></small></th><td><span class="badge{{if .IsAdmin}} green{{end}}">{{if .IsAdmin}}Administrator{{else}}User{{end}}</span></td></tr>{{else}}<tr><td colspan="2">No users found.</td></tr>{{end}}</tbody></table></div></article>{{end}}
 {{end}}
 
 {{define "message"}}<p class="notice" role="{{if .Error}}alert{{else}}status{{end}}">{{if .Error}}{{.Error}}{{else}}{{.Message}}{{end}}</p>{{end}}

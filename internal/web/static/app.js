@@ -325,3 +325,33 @@ document.addEventListener("htmx:afterSettle", event => {
     highlight(target);
   });
 })();
+
+// Filters replace only their list; keep keyboard focus at its new disclosure.
+(() => {
+  const requests = new WeakMap();
+  document.addEventListener("htmx:beforeRequest", event => {
+    const source = event.detail.elt;
+    if (source.matches("[data-activity-filter]") && source.contains(document.activeElement)) {
+      requests.set(event.detail.xhr, source.closest(".user-filter").querySelector("summary").id);
+    }
+  });
+  document.addEventListener("htmx:afterSettle", event => {
+    const id = requests.get(event.detail.xhr);
+    requests.delete(event.detail.xhr);
+    if (id && document.activeElement === document.body) {
+      document.getElementById(id)?.focus({ preventScroll: true });
+    }
+  });
+  document.addEventListener("keydown", event => {
+    if (event.key !== "Escape") return;
+    document.querySelectorAll(".user-filter[open]").forEach(menu => {
+      menu.open = false;
+      menu.querySelector("summary").focus();
+    });
+  });
+  document.addEventListener("click", event => {
+    document.querySelectorAll(".user-filter[open]").forEach(menu => {
+      if (!menu.contains(event.target)) menu.open = false;
+    });
+  });
+})();

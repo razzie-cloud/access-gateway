@@ -46,7 +46,7 @@ func TestPostgresAdminPanel(t *testing.T) {
 		require.Equal(t, 200, w.Code)
 		assert.Equal(t, token != "", strings.Contains(w.Body.String(), `id="activity-data"`))
 	}
-	w := request(s, "GET", "/ui/admin", "", "admin-session")
+	w := request(s, "GET", "/ui/admin?devices_user=all&sessions_user=all", "", "admin-session")
 	require.Equal(t, 200, w.Code, w.Body.String())
 	assert.Equal(t, "no-store", w.Header().Get("Cache-Control"))
 	for _, u := range []User{admin, member} {
@@ -56,8 +56,8 @@ func TestPostgresAdminPanel(t *testing.T) {
 	}
 	assert.Contains(t, w.Body.String(), id.String())
 	assert.Contains(t, w.Body.String(), "Pending.User")
-	assert.Contains(t, w.Body.String(), "Users (3)")
-	assert.Contains(t, w.Body.String(), "Active sessions (2)")
+	assert.Contains(t, w.Body.String(), `Users <span class="badge">3</span>`)
+	assert.Contains(t, w.Body.String(), `Active sessions <span class="badge">2</span>`)
 	assert.Contains(t, w.Body.String(), testAppOrigin)
 	for _, secret := range []string{"admin-session", "member-session", appToken} {
 		assert.NotContains(t, w.Body.String(), secret)

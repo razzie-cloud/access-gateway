@@ -180,8 +180,12 @@ absolute registration URLs from untrusted Host or forwarded headers.
   when full rather than evicting live ones. Each replica has its own budget.
 - GET / and /register: full pages. GET /ui/state: account fragment.
 - GET /ui/activity: signed-in users see their own devices and sessions; admins
-  also see all users/UUIDs, devices and sessions. GET /ui/admin is an admin-only
-  alias. HTMX loads and refreshes the panel. Filter rows server-side, never in JS.
+  also see all users/UUIDs and can select a UUID or `all` independently through
+  `devices_user` and `sessions_user`. Both lists default to the current admin.
+  Scope parameters never expand regular-user visibility; selected scopes survive
+  refresh, device/session changes and user creation. Device protection uses all
+  live sessions regardless of the visible session filter. GET /ui/admin remains
+  an admin-only alias. HTMX loads and refreshes the panel. Filter rows server-side, never in JS.
 - POST /ui/devices/rename (device_id, device_name), /ui/devices/remove (device_id)
   and /ui/sessions/remove (kind, session_id): owner or admin only. Recheck access
   for each action; protect the caller's current gateway session and its app

@@ -1,0 +1,56 @@
+/* Administrator user-scope proposal; the live UI is unchanged. */
+.activity-workspace .activity-hint { font-size: .8rem; color: var(--pico-muted-color); margin: -1rem 0 1.5rem; }
+.activity-panel { overflow: visible; min-width: 0; }
+.activity-panel:has(details.dropdown.user-filter[open]) { position: relative; z-index: 2; }
+.activity-panel .section-heading { align-items: flex-start; flex-wrap: wrap; }
+.activity-workspace .section-heading h2 { display: flex; align-items: center; gap: .45rem; }
+.activity-workspace .section-heading h2>.badge { flex-shrink: 0; margin: 0; }
+.activity-controls { display: flex; align-items: center; gap: .9rem; flex-wrap: wrap; }
+.activity-controls>.text-button { display: inline-flex; align-items: center; justify-content: center; gap: .35rem; height: 38px; margin: 0; padding: 0; font-size: .8rem; line-height: 1.4; }
+.activity-controls>.text-button .icon { display: block; width: 16px; height: 16px; }
+details.dropdown.user-filter { margin: 0; font-size: .8rem; }
+details.dropdown.user-filter summary { display: flex; align-items: center; gap: .5rem; height: 38px; margin: 0; padding: 0 .7rem; border: 1px solid var(--pico-muted-border-color); border-radius: .4rem; background: var(--pico-card-background-color); color: var(--pico-color); line-height: 1.4; }
+details.dropdown.user-filter summary::after { display: none; }
+details.dropdown.user-filter summary .filter-chevron { margin-left: .3rem; }
+details.dropdown.user-filter[open] summary .filter-chevron { transform: rotate(180deg); }
+details.dropdown.user-filter summary .icon { width: 16px; height: 16px; }
+details.dropdown.user-filter ul { min-width: 190px; margin-top: .4rem; padding: .35rem; }
+details.dropdown.user-filter li { margin: 0; padding: 0; }
+details.dropdown.user-filter li button { display: flex; justify-content: space-between; align-items: center; gap: 1rem; width: 100%; margin: 0; padding: .65rem .7rem; border: 0; border-radius: .3rem; background: transparent; box-shadow: none; color: inherit; text-align: left; font-size: .8rem; }
+details.dropdown.user-filter li button:hover,details.dropdown.user-filter li button:focus-visible { background: var(--pico-dropdown-hover-background-color); }
+details.dropdown.user-filter li button[aria-current="true"] { background: #fff1cb; color: #202e50; font-weight: 650; }
+[data-theme="dark"] details.dropdown.user-filter li button[aria-current="true"] { background: #493c24; color: #ffcb67; }
+.choice-check { visibility: hidden; }
+[aria-current="true"]>.choice-check { visibility: visible; }
+.activity-panel .device-row { grid-template-columns: 36px minmax(0,1fr) auto; }
+.activity-panel .device-row>.badge { justify-self: end; }
+.activity-panel .device-management { grid-column: 2 / -1; min-width: 0; }
+.activity-panel .device-management summary { width: fit-content; }
+.activity-panel .device-management form { display: flex; align-items: end; flex-wrap: wrap; gap: .6rem; }
+.activity-panel .device-management label { margin: 0; }
+.activity-panel .device-management input { max-width: 100%; width: 230px; margin-bottom: 0; }
+.activity-panel .device-management button { width: auto; margin: 0; }
+.activity-panel .device-management>.danger { margin-top: .8rem; }
+.activity-empty { padding: 1.2rem 1.5rem; margin: 0; color: var(--pico-muted-color); font-size: .85rem; }
+.activity-panel [role="status"]:not(:empty) { padding: 0 1.4rem 1rem; }
+.activity-panel [role="status"] .notice { margin: 0; }
+.activity-panel .overflow-auto { border-radius: 0; }
+.activity-panel .card-caption { border-radius: 0 0 var(--pico-border-radius) var(--pico-border-radius); }
+@media (max-width: 1100px) and (min-width: 761px) {
+  .activity-workspace .content-columns { grid-template-columns: minmax(0,1fr); }
+}
+@media (max-width: 760px) {
+  .activity-panel .section-heading { padding: 1.1rem; }
+  .activity-panel .activity-controls { width: 100%; justify-content: space-between; }
+  .activity-panel .device-row { padding: 1rem; gap: .65rem; }
+  .activity-panel .device-management { grid-column: 1 / -1; }
+  .activity-panel .device-row>.file-icon { width: 32px; }
+  .activity-panel .device-row p { font-size: .82rem; }
+  .activity-panel .device-row small { font-size: .7rem; }
+  .activity-panel .device-row>.badge { font-size: .6rem; padding: .2rem .4rem; }
+  .activity-panel .empty-session-row { display: block; }
+}
+/* This historical mockup shell nests the service label inside brand-text. */
+@media (max-width: 760px) {
+  .topbar .brand-text .service-name { margin-left: 0; }
+}

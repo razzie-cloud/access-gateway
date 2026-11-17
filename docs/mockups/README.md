@@ -6,6 +6,8 @@ Serve the **Razzie Cloud parent directory** with
 
 | Screen | File | Review focus |
 | --- | --- | --- |
+| User filters (new proposal) | [activity.html](activity.html) | Admin-only per-list user dropdowns, current admin selected by default |
+| Regular-user activity | [activity-member.html](activity-member.html) | Own devices/sessions with no user dropdowns or administration controls |
 | Administrator overview | [index.html](index.html) | Devices and sessions beside enrollment/user creation |
 | Grouped sessions | [sessions.html](sessions.html) | One row per gateway login, selectable app sessions and gateway trash action |
 | Passkey sign-in | [login.html](login.html) | Two-column entry screen and clear primary action |
@@ -14,6 +16,73 @@ Serve the **Razzie Cloud parent directory** with
 | Administrator access denied | [admin-denied.html](admin-denied.html) | Centered branded 403 page on a protected app hostname |
 
 [Account screenshot](index-desktop.png) · [Sign-in screenshot](login-desktop.png)
+
+## Device and session user filters proposal
+
+Open the [administrator preview](activity.html), its [dark counterpart](dark/activity.html),
+or the [regular-user preview](activity-member.html) ([dark](dark/activity-member.html)).
+The new activity concept uses the existing account shell and grouped sessions.
+Both **Devices** and **Active sessions** have a compact user icon and chevron
+beside their headings. The selected account remains visible when closed.
+
+Each list defaults to **razzie (you)**, the signed-in sample administrator.
+Choose one account or **All users** independently for each list. The selected
+option has a checkmark; the heading count reflects that list's displayed rows.
+**Refresh** keeps the selected account and restores that scope's sample records.
+Switching one list preserves the other list's app selections and device drafts.
+The sample account **taylor** has no devices or sessions, demonstrating empty
+states without losing the filter. A full reload or theme switch resets the
+sample selections to the signed-in account.
+
+Regular users see only their own activity, without either user dropdown, the
+administrator badge, the users table or user-creation form. This is a visual
+fixture, not an authorization test. Production now implements the reviewed
+filters on the server, including independent scope retention, role/owner checks,
+long-name handling and the control/counter alignment. See
+[managing devices and sessions](../reference.md#manage-devices-and-sessions) and the
+[parent implementation verification](../../../docs/frontend-mockups.md#gateway-device-and-session-user-filters).
+These pages remain separate sample-data fixtures.
+
+Filtering uses authored HTML fragments under `fragments/activity/` with HTMX;
+no hidden cross-user rows are downloaded in the initial own-account panels.
+`activity.js` handles focus/Escape and the existing browser-local session
+mutation simulation. Device actions display sample receipts. Requests omit
+form values with `hx-params="none"`. No real API is contacted and no data persists;
+changing scopes restores that scope's authored fixture. Serve the parent root,
+as shared scope fragments use parent-relative absolute paths for both themes.
+
+Screenshots: [default desktop](activity-desktop.png),
+[default mobile](activity-mobile.png), [open dropdown](activity-dropdown-desktop.png),
+[mobile dropdown](activity-dropdown-mobile.png),
+[regular user](activity-member-desktop.png),
+[regular user mobile](activity-member-mobile.png), and the matching
+[dark desktop](dark/activity-desktop.png), [dark mobile](dark/activity-mobile.png),
+[dark dropdown](dark/activity-dropdown-desktop.png),
+[dark mobile dropdown](dark/activity-dropdown-mobile.png),
+[dark regular user](dark/activity-member-desktop.png) and
+[dark regular user mobile](dark/activity-member-mobile.png).
+
+Verification: Brave/Chromium passed 16 admin/member layouts in light and dark
+at 320, 390, 768 and 1440 pixels, plus 80 primary scope changes. Checks exercised
+both independent filters, own-account defaults, all users, every individual
+account, counts, empty states, scoped refresh, keyboard Enter/Tab/Escape and
+focus restoration, theme round trips, member-only controls, preserved selections,
+simulated app/gateway removal and draft-free device-action requests. Assets loaded,
+one primary heading and no page overflow passed. There were no page/console/CSP
+errors or HTTP failures; page HTTP traffic consisted of 526 local GETs with no
+query/form values. Twelve screenshots were captured and visually reviewed.
+Relative-reference and parent/component whitespace checks passed. Static mockups
+only: no Go build/tests, live authentication, publication or deployment ran.
+
+The alignment follow-up removes Pico's inherited Refresh bottom margin and
+sets the dropdown and Refresh to the same 38px height, line height and 16px
+icons. Heading counters for Devices, Active sessions and People with access
+use centered flex rows with explicit spacing instead of inline baseline alignment.
+Chromium checked counter/text centers, matching control top edges and icon centers in
+all 16 admin/member theme/viewport cases above. Filtering, scoped refresh and
+Escape/focus passed with no browser/CSP errors or failed responses. All twelve
+screenshots were refreshed and visually reviewed; parent/component whitespace
+checks passed. This remains a static-only mockup change with no Go checks.
 
 ## Grouped gateway sessions proposal
 
