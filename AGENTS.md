@@ -49,6 +49,12 @@ for browser WebAuthn APIs and status/HTMX integration.
 
 - `internal/web/templates.html`: Go html/template page and fragment definitions.
 - `internal/web/static/app.js`: WebAuthn bridge and HTMX error rendering.
+- Device rows use pencil-triggered inline PicoCSS grouped rename forms and trash
+  actions with native confirmation. Keep Enter/Escape, cancel, focus return and
+  disabled in-use removal working after HTMX swaps. Device mutation errors target
+  `devices-feedback`, retaining the editor and draft; activity-group refreshes
+  preserve unrelated open device drafts. The server still owns names, scope,
+  ownership and live-session removal checks.
 - `internal/web/static/app.css`: responsive layout and automatic light/dark PicoCSS
   overrides. Keep navigation inside the account fragment so authentication state
   changes refresh it together with the live forms.

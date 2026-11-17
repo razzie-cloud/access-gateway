@@ -198,8 +198,15 @@ the exact origin and expiry. Multiple sessions for the same origin receive
 separate numbered chips so each can be selected independently. The session count
 counts gateway logins only.
 
-Open a device's **Manage** disclosure to **Rename** it at any time, including
-the current device, or remove an unused device. Select app-session checkboxes
+Use the pencil beside a device's name to rename it at any time, including the
+current device. The name becomes a text field with attached × cancel and ✓ save
+buttons. Enter saves; Escape or × cancels. Failed requests retain the draft and
+show an error inside the Devices panel. Other activity mutations preserve open
+rename drafts for devices that remain in the refreshed list. The device's trash
+button confirms removal of an unused passkey; devices with live sessions keep
+their removal action disabled. Cancel or Escape dismisses the confirmation.
+
+Select app-session checkboxes
 and choose **Delete selected apps** to revoke only those app sessions. The gateway
 login stays active and may automatically sign the browser back into those apps.
 The row's trash button opens a confirmation dialog; **Delete gateway session**

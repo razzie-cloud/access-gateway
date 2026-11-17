@@ -225,6 +225,114 @@ document.addEventListener("htmx:afterSettle", event => {
   }
 });
 
+// Device editors keep real HTMX forms and server validation. Only presentation,
+// confirmation and focus are handled here, including rows inserted by HTMX.
+(() => {
+  let confirmation;
+  const requests = new WeakMap();
+  const swaps = new WeakMap();
+  function edit(row, open) {
+    row.querySelector(".device-name-line").hidden = open;
+    row.querySelector(".device-rename").hidden = !open;
+  }
+  function cancel(row) {
+    if (row.querySelector(".device-rename").classList.contains("htmx-request")) return;
+    const input = row.querySelector('[name="device_name"]');
+    input.value = input.defaultValue;
+    edit(row, false);
+    row.querySelector("[data-edit-device]").focus({ preventScroll: true });
+  }
+  document.addEventListener("click", event => {
+    const pencil = event.target.closest("[data-edit-device]");
+    if (pencil) {
+      const row = pencil.closest(".device-row");
+      edit(row, true);
+      const input = row.querySelector('[name="device_name"]');
+      input.focus({ preventScroll: true });
+      input.select();
+    }
+    const button = event.target.closest("[data-cancel-device-rename]");
+    if (button) cancel(button.closest(".device-row"));
+    if (!event.target.closest("[data-confirm-device-delete], [data-cancel-device-delete]")) return;
+    const pending = confirmation;
+    confirmation = null;
+    event.target.closest("dialog").close();
+    if (event.target.closest("[data-confirm-device-delete]") && pending?.form.isConnected) {
+      pending.form.querySelector("button").focus({ preventScroll: true });
+      pending.issue(true);
+    }
+  });
+  document.addEventListener("keydown", event => {
+    if (event.key !== "Escape" || !event.target.closest(".device-rename")) return;
+    event.preventDefault();
+    cancel(event.target.closest(".device-row"));
+  });
+  document.addEventListener("htmx:confirm", event => {
+    const form = event.detail.elt.closest("[data-device-remove]");
+    if (!form) return;
+    const dialog = document.getElementById("delete-device-dialog");
+    if (!dialog) return;
+    event.preventDefault();
+    confirmation = { form, issue: event.detail.issueRequest };
+    dialog.querySelector("[data-remove-device-name]").textContent = form.dataset.deviceName;
+    dialog.showModal();
+    dialog.querySelector("[data-cancel-device-delete]").focus();
+  });
+  document.addEventListener("close", event => {
+    if (event.target.id === "delete-device-dialog" && !event.target.open) confirmation = null;
+  }, true);
+  document.addEventListener("htmx:beforeRequest", event => {
+    const form = event.detail.elt.closest(".device-rename, [data-device-remove]");
+    if (!form) return;
+    const row = form.closest(".device-row");
+    requests.set(event.detail.xhr, {
+      row: row.id,
+      next: row.nextElementSibling?.id || row.previousElementSibling?.id,
+      focus: form.contains(document.activeElement)
+    });
+  });
+  document.addEventListener("htmx:beforeSwap", event => {
+    if (event.detail.target.id !== "activity-data" || !event.detail.shouldSwap) return;
+    const saved = event.detail.xhr.status === 200 && event.detail.requestConfig.elt.closest(".device-rename")?.closest(".device-row").id;
+    const drafts = [...document.querySelectorAll('.device-rename:not([hidden])')]
+      .filter(form => form.closest(".device-row").id !== saved)
+      .map(form => ({ row: form.closest(".device-row").id, value: form.querySelector('[name="device_name"]').value }));
+    const active = document.activeElement;
+    swaps.set(event.detail.xhr, {
+      drafts,
+      row: active.closest(".device-row")?.id,
+      input: active.matches('[name="device_name"]'),
+      start: active.selectionStart,
+      end: active.selectionEnd
+    });
+  });
+  document.addEventListener("htmx:afterSwap", event => {
+    const swap = swaps.get(event.detail.xhr);
+    if (!swap) return;
+    for (const draft of swap.drafts) {
+      const row = document.getElementById(draft.row);
+      if (!row) continue;
+      row.querySelector('[name="device_name"]').value = draft.value;
+      edit(row, true);
+    }
+  });
+  document.addEventListener("htmx:afterSettle", event => {
+    const request = requests.get(event.detail.xhr);
+    const swap = swaps.get(event.detail.xhr);
+    requests.delete(event.detail.xhr);
+    swaps.delete(event.detail.xhr);
+    if (document.activeElement !== document.body) return;
+    const row = document.getElementById(swap?.row || request?.row);
+    if ((swap?.input || request?.focus) && row?.querySelector('.device-rename:not([hidden])')) {
+      const input = row.querySelector('[name="device_name"]');
+      input.focus({ preventScroll: true });
+      if (swap?.input) input.setSelectionRange(swap.start, swap.end);
+    } else if (request?.focus) {
+      (row?.querySelector("[data-edit-device]") || document.getElementById(request.next)?.querySelector("[data-edit-device]") || document.getElementById("refresh-devices"))?.focus({ preventScroll: true });
+    }
+  });
+})();
+
 // HTMX submits real session forms; this bridge supplies selection state, native
 // confirmation and focus after the server refreshes the activity group.
 (() => {

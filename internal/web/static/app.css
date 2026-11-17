@@ -134,11 +134,6 @@ td small,th small { display: block; font-weight: 400; margin-top: .2rem; font-si
 .device-row { display: grid; grid-template-columns: 42px minmax(0,1fr) auto; align-items: center; gap: .9rem; padding: 1.2rem 1.4rem; border-top: 1px solid #edf0f4; }
 .device-row p { margin: 0; font-size: .88rem; font-weight: 550; }
 .device-row small { display: block; font-size: .73rem; }
-.device-row .device-actions { display: flex; gap: .85rem; align-items: center; }
-.device-row details { margin: 0; font-size: .78rem; }
-.device-row details summary { color: #627185; }
-.device-row details form { margin-top: .7rem; }
-.device-row details input { max-width: 180px; }
 .account-strip { padding: 1.2rem 1.4rem; display: flex; align-items: center; gap: 1rem; margin-bottom: 1.4rem; }
 .account-strip p { margin: 0; font-size: .86rem; }
 .account-strip .avatar { width: 43px; height: 43px; background: #e7f0ed; color: #326d60; }
@@ -265,7 +260,6 @@ details.dropdown>ul { min-width: 250px; right: 0; left: auto; }
 :root:not([data-theme="light"]) .note { background: #20372f; color: #aed2bf; }
 :root:not([data-theme="light"]) .notice { background: #203d30; color: #b4e2c4; border-color: #426b51; }
 :root:not([data-theme="light"]) .device-row { border-color: #2b384c; }
-:root:not([data-theme="light"]) .device-row details summary { color: #b1c0d6; }
 :root:not([data-theme="light"]) .account-strip .avatar { background: #303b50; color: #e9cc8e; }
 :root:not([data-theme="light"]) .form-help p { color: #a0afc4; }
 :root:not([data-theme="light"]) .form-section { border-color: #2b384c; }
@@ -341,15 +335,34 @@ nav[aria-label="breadcrumb"] li { overflow-wrap: anywhere; min-width: 0; }
 nav[aria-label="breadcrumb"] li:last-child a { color: var(--pico-color); }
 @media(max-width:760px) { .topbar { padding: .8rem 1rem; } .brand { font-size: 1rem; gap: .4rem; } .brand-mark { width: 38px; height: 38px; } .service-name { padding-left: .6rem; margin-left: 0; } .auth-story h2 { font-size: 2rem; } .auth-wrap { margin-top: 1.5rem; } }
 
-.device-row { grid-template-columns: 34px minmax(0,1fr) auto auto; }
+/* Compact device rows with a name editor that keeps the same line height. */
+.device-row { grid-template-columns: 36px minmax(0,1fr) 38px; gap: .8rem; padding-block: .9rem; }
+.device-name-line { display: flex; align-items: center; gap: .3rem; min-height: 36px; }
+.device-name-line [data-device-name] { min-width: 0; }
+.device-edit { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 36px; width: 36px; height: 36px; margin: 0; padding: 0; color: var(--pico-muted-color); border: 1px solid transparent; background: transparent; line-height: 1; }
+.device-edit:hover { color: var(--pico-primary); background: var(--pico-background-color); border-color: var(--pico-muted-border-color); }
+.device-row .icon { display: block; }
+.device-edit .icon,.device-rename .icon,.device-remove .icon { width: 18px; height: 18px; }
+.device-meta { display: flex; align-items: center; flex-wrap: wrap; gap: .35rem .65rem; }
+.device-meta small { overflow-wrap: anywhere; }
+.device-meta .badge { margin: 0; font-size: .63rem; line-height: 1.4; }
+.device-rename { max-width: 380px; margin: 0; }
+.device-rename [role="group"] { margin: 0; box-shadow: none; }
+.device-rename input[name="device_name"] { min-width: 0; width: 100%; height: 36px; margin: 0; padding: .4rem .6rem; font-size: .85rem; }
+.device-rename button { flex: 0 0 36px; width: 36px; height: 36px; margin: 0; padding: 0; }
+.device-remove { margin: 0; }
+.device-remove .session-trash { display: inline-flex; align-items: center; justify-content: center; margin: 0; padding: 0; }
+.device-row [hidden] { display: none; }
+@media (max-width: 760px) {
+ .device-row { grid-template-columns: 28px minmax(0,1fr) 36px; padding: .85rem .75rem; gap: .45rem; }
+ .device-row>.file-icon { width: 28px; height: 32px; }
+ .device-info small { font-size: .7rem; }
+ .device-remove .session-trash { width: 36px; height: 36px; }
+ .device-meta { gap: .35rem; }
+ .device-meta .badge { font-size: .6rem; }
+ .table-card form button { white-space: normal; }
+}
 .device-info { min-width: 0; }
-.device-management { margin: 0; font-size: .8rem; }
-.device-management[open] { grid-column: 2 / -1; }
-.device-management summary { color: var(--pico-muted-color); }
-.management-controls { display: flex; align-items: end; flex-wrap: wrap; gap: 1rem; margin-top: 1rem; }
-.management-controls .device-rename { flex: 1; min-width: 0; }
-.management-controls input { width: 100%; }
-.management-controls button { width: auto; }
 .registration-result { margin-top: 1.2rem; overflow-wrap: anywhere; }
 .registration-result h3 { font-size: 1rem; }
 .registration-link-group input { min-width: 0; }
@@ -359,7 +372,6 @@ nav[aria-label="breadcrumb"] li:last-child a { color: var(--pico-color); }
 .qr { display: block; width: 100%; max-width: 320px; height: auto; background: white; border: .6rem solid white; border-radius: .5rem; margin-bottom: 1rem; }
 #activity-data { scroll-margin-top: 1rem; }
 #devices,#sessions,#users,#registration { scroll-margin-top: 1rem; }
-@media(max-width:760px) { .device-row { grid-template-columns: 32px minmax(0,1fr) auto; } .device-management { grid-column: 2 / -1; } .device-info small { font-size: .7rem; } .table-card form button { white-space: normal; } }
 
 .workspace,.public-workspace { overflow-wrap: anywhere; }
 .page-heading>div>small:first-child { display: block; margin-bottom: .5rem; font-size: .68rem; font-weight: 700; letter-spacing: .13em; color: var(--pico-muted-color); }
@@ -434,7 +446,7 @@ nav[aria-label="breadcrumb"] li:last-child a { color: var(--pico-color); }
 }
 
 /* One row per gateway login, with independently selectable app sessions. */
-#sessions { --session-danger: #a24e4e; }
+:is(#devices,#sessions) { --session-danger: #a24e4e; }
 #sessions>.section-heading { flex-wrap: wrap; }
 .sessions-table { width: 100%; }
 .sessions-table thead th:first-child { width: 24%; }
@@ -462,13 +474,13 @@ nav[aria-label="breadcrumb"] li:last-child a { color: var(--pico-color); }
 #sessions .card-caption p { margin: 0; }
 #sessions .card-caption p+p { margin-top: .4rem; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
-#delete-session-dialog article { max-width: 540px; }
-#delete-session-dialog h2 { margin: 0; }
-#delete-session-dialog p { font-size: .9rem; }
-#delete-session-dialog footer { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: .7rem; }
+:is(#delete-device-dialog,#delete-session-dialog) article { max-width: 540px; }
+:is(#delete-device-dialog,#delete-session-dialog) h2 { margin: 0; }
+:is(#delete-device-dialog,#delete-session-dialog) p { font-size: .9rem; }
+:is(#delete-device-dialog,#delete-session-dialog) footer { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: .7rem; }
 .session-delete-confirm { color: #fff; background: #a24e4e; border-color: #a24e4e; }
 .session-delete-confirm:hover { color: #fff; background: #873f3f; border-color: #873f3f; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) #sessions { --session-danger: #f1a4a7; } }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) :is(#devices,#sessions) { --session-danger: #f1a4a7; } }
 @media (max-width: 760px) {
  .sessions-table,.sessions-table tbody { display: block; }
  .sessions-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
@@ -482,12 +494,12 @@ nav[aria-label="breadcrumb"] li:last-child a { color: var(--pico-color); }
  .session-expiry::before { content: "Expires "; }
  .session-expiry small { display: inline; font-size: inherit; margin-left: .3rem; }
  .sessions-table .delete-apps { min-height: 36px; }
- #delete-session-dialog { padding: 1rem; }
- #delete-session-dialog article { padding: 1.25rem; }
- #delete-session-dialog article>header,#delete-session-dialog article>footer { margin-inline: -1.25rem; padding-inline: 1.25rem; }
- #delete-session-dialog article>header { margin-top: -1.25rem; }
- #delete-session-dialog article>footer { margin-bottom: -1.25rem; }
- #delete-session-dialog footer button { width: 100%; white-space: normal; }
+ :is(#delete-device-dialog,#delete-session-dialog) { padding: 1rem; }
+ :is(#delete-device-dialog,#delete-session-dialog) article { padding: 1.25rem; }
+ :is(#delete-device-dialog,#delete-session-dialog) article>header,:is(#delete-device-dialog,#delete-session-dialog) article>footer { margin-inline: -1.25rem; padding-inline: 1.25rem; }
+ :is(#delete-device-dialog,#delete-session-dialog) article>header { margin-top: -1.25rem; }
+ :is(#delete-device-dialog,#delete-session-dialog) article>footer { margin-bottom: -1.25rem; }
+ :is(#delete-device-dialog,#delete-session-dialog) footer button { width: 100%; white-space: normal; }
 }
 
 /* Administrator activity scopes; keep badges, icons and controls centered. */

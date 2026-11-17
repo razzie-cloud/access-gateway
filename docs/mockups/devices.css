@@ -1,0 +1,26 @@
+/* Compact device actions proposal; shared by both activity previews. */
+.activity-panel .device-row { grid-template-columns: 36px minmax(0,1fr) 38px; gap: .8rem; padding-block: .9rem; }
+.device-copy { min-width: 0; }
+.device-name-line { display: flex; align-items: center; gap: .3rem; min-height: 36px; }
+.device-name-line [data-device-name] { min-width: 0; overflow-wrap: anywhere; }
+.device-row .icon-button { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; margin: 0; padding: 0; line-height: 1; }
+.device-row .icon-button .icon { display: block; width: 18px; height: 18px; }
+.device-row .device-edit { width: 36px; height: 36px; color: var(--pico-muted-color); }
+.device-row .device-edit:hover:enabled { color: var(--pico-primary); }
+.device-meta { display: flex; align-items: center; flex-wrap: wrap; gap: .35rem .65rem; }
+.device-meta .badge { margin: 0; font-size: .63rem; line-height: 1.4; }
+.device-row .device-rename { max-width: 380px; margin: 0; }
+.device-row .device-rename [role="group"] { margin: 0; box-shadow: none; }
+.device-row .device-rename input { min-width: 0; width: 100%; height: 36px; margin: 0; padding: .4rem .6rem; font-size: .85rem; }
+.device-row .device-rename button { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 36px; width: 36px; height: 36px; margin: 0; padding: 0; }
+.device-row .device-rename .icon { width: 18px; height: 18px; }
+.device-row [hidden] { display: none; }
+.device-row .device-receipt { display: none; }
+.devices-empty { padding: 1rem 1.4rem; margin: 0; font-size: .85rem; color: var(--pico-muted-color); }
+@media (max-width: 760px) {
+  .activity-panel .device-row { grid-template-columns: 28px minmax(0,1fr) 36px; padding: .85rem .75rem; gap: .45rem; }
+  .activity-panel .device-row>.file-icon { width: 28px; height: 32px; }
+  .device-row>[data-delete-device] { width: 36px; height: 36px; }
+  .device-meta { gap: .35rem; }
+  .device-meta .badge { font-size: .6rem; }
+}

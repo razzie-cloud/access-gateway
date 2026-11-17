@@ -6,8 +6,8 @@ Serve the **Razzie Cloud parent directory** with
 
 | Screen | File | Review focus |
 | --- | --- | --- |
-| User filters (new proposal) | [activity.html](activity.html) | Admin-only per-list user dropdowns, current admin selected by default |
-| Regular-user activity | [activity-member.html](activity-member.html) | Own devices/sessions with no user dropdowns or administration controls |
+| Compact devices / administrator activity | [activity.html](activity.html) | Inline pencil rename, grouped cancel/save icons, device trash and per-list user filters |
+| Compact devices / regular-user activity | [activity-member.html](activity-member.html) | Own devices/sessions with inline rename and trash, without administration controls |
 | Administrator overview | [index.html](index.html) | Devices and sessions beside enrollment/user creation |
 | Grouped sessions | [sessions.html](sessions.html) | One row per gateway login, selectable app sessions and gateway trash action |
 | Passkey sign-in | [login.html](login.html) | Two-column entry screen and clear primary action |
@@ -16,6 +16,57 @@ Serve the **Razzie Cloud parent directory** with
 | Administrator access denied | [admin-denied.html](admin-denied.html) | Centered branded 403 page on a protected app hostname |
 
 [Account screenshot](index-desktop.png) · [Sign-in screenshot](login-desktop.png)
+
+## Compact device actions proposal
+
+Open the [regular-user preview](activity-member.html) or its
+[dark counterpart](dark/activity-member.html). The same controls appear in the
+[administrator preview](activity.html) and [dark administrator preview](dark/activity.html),
+including after filtering or refreshing the Devices panel.
+
+The **Manage** disclosure is replaced by a pencil next to each name and a trash
+button at the row's right edge, matching Sessions. Clicking the pencil replaces
+the name with a focused, selected text field and attached **× Cancel** and
+**✓ Save** icon buttons in a PicoCSS `role="group"`. Editing keeps the row's
+height. Enter saves; Escape or × restores the previous name. Icon controls have
+accessible labels, tooltips and keyboard focus. Long names wrap within the row.
+Status badges sit beside the registration metadata below the name.
+
+Devices with active sessions retain disabled trash buttons. The inactive
+**Backup security key** demonstrates removal with a confirmation dialog, focus
+return and an updated device count. Administrator **alex** also demonstrates
+removing the last row. Refresh restores the selected scope's authored sample
+data. Names and removals change only the current browser fixture; session names
+and device protection remain fixed examples. Nothing persists across refreshes,
+scope changes or theme navigation.
+
+`devices.css` and `devices.js` are mockup-only. Mutations fetch an authored local
+HTMX receipt with `hx-params="none"`; entered names are never transmitted.
+Failed rename requests retain the draft and permit retry. These files remain
+independent sample fixtures. Production now implements the reviewed controls
+with real POST forms, server validation, native confirmation and preserved drafts;
+see [device management](../reference.md#manage-devices-and-sessions).
+
+Screenshots: [light rename](devices-edit-desktop.png),
+[dark rename](dark/devices-edit-desktop.png),
+[light mobile rename](devices-edit-mobile.png),
+[dark mobile rename](dark/devices-edit-mobile.png),
+[light removal](devices-delete-desktop.png), and
+[dark removal](dark/devices-delete-desktop.png).
+The twelve existing activity/default/dropdown screenshots are refreshed too.
+
+Verification: headless Brave/Chromium checked all four full pages in light/dark,
+administrator/member variants at 320, 390, 768 and 1440 pixels (16 layouts).
+Checks covered one heading, loaded assets, overflow, equal group-control heights,
+unchanged row height while editing, keyboard entry/save/cancel, invalid names,
+long/escaped names, scoped refresh, all administrator device scopes, retained
+session selections, protected trash, confirmation Cancel/Escape, focus return,
+removal counts/empty state and matching theme navigation. A deliberately blocked
+local rename request retained its draft and succeeded on retry. All HTTP traffic
+was local GET requests without draft values. No unexpected browser/CSP errors or
+HTTP failures occurred. Screenshots were visually inspected, and relative-file
+references and Git whitespace checks passed. No Go checks or live backend,
+WebAuthn, publication or deployment ran for these static mockups.
 
 ## Device and session user filters proposal
 
@@ -46,7 +97,7 @@ These pages remain separate sample-data fixtures.
 Filtering uses authored HTML fragments under `fragments/activity/` with HTMX;
 no hidden cross-user rows are downloaded in the initial own-account panels.
 `activity.js` handles focus/Escape and the existing browser-local session
-mutation simulation. Device actions display sample receipts. Requests omit
+mutation simulation. Device actions now use the compact-controls proposal above. Requests omit
 form values with `hx-params="none"`. No real API is contacted and no data persists;
 changing scopes restores that scope's authored fixture. Serve the parent root,
 as shared scope fragments use parent-relative absolute paths for both themes.

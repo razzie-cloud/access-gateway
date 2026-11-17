@@ -139,6 +139,19 @@ func TestFrontendProtectedActivityActions(t *testing.T) {
 		}
 	}
 	assert.Contains(t, html, `hx-post="/ui/devices/rename"`)
+	assert.Contains(t, html, `id="delete-device-dialog"`)
+	assert.NotContains(t, html, `<summary>Manage</summary>`)
+	renames := regexp.MustCompile(`(?s)<form[^>]+hx-post="/ui/devices/rename"[^>]*>.*?</form>`).FindAllString(html, -1)
+	require.Len(t, renames, 2)
+	for _, form := range renames {
+		assert.Contains(t, form, ` hidden `)
+		assert.Contains(t, form, `role="group"`)
+		assert.Contains(t, form, `name="device_id"`)
+		assert.Contains(t, form, `name="device_name"`)
+		assert.Contains(t, form, `aria-label="Cancel rename"`)
+		assert.Contains(t, form, `aria-label="Save device name"`)
+		assert.NotContains(t, form, ` disabled`, "active devices can still be renamed")
+	}
 	assert.NotContains(t, html, `id="users"`)
 	checkboxes := regexp.MustCompile(`<input[^>]+type="checkbox"[^>]*>`).FindAllString(html, -1)
 	require.Len(t, checkboxes, 2)
@@ -150,6 +163,39 @@ func TestFrontendProtectedActivityActions(t *testing.T) {
 	assert.Contains(t, html, `hx-post="/ui/sessions/apps/remove"`)
 	assert.Equal(t, 2, strings.Count(html, `name="kind" value="Gateway"`))
 	assert.Contains(t, html, `id="delete-session-dialog"`)
+}
+
+func TestDeviceActionErrorsKeepEditor(t *testing.T) {
+	s := unitServer()
+	for _, path := range []string{"/ui/devices/rename", "/ui/devices/remove"} {
+		for _, status := range []int{400, 401, 403, 404, 409, 500, 503} {
+			r := httptest.NewRequest(http.MethodPost, path, nil)
+			r.Header.Set("HX-Request", "true")
+			r.Header.Set("HX-Target", "activity-data")
+			w := httptest.NewRecorder()
+			s.writeError(w, r, status, "Unable to update device")
+			assert.Equal(t, status, w.Code)
+			assert.Equal(t, "#devices-feedback", w.Header().Get("HX-Retarget"))
+			assert.Equal(t, "innerHTML", w.Header().Get("HX-Reswap"))
+			assert.Contains(t, w.Body.String(), `role="alert"`)
+			assert.NotContains(t, w.Body.String(), "<form", "error updates must retain the browser's draft")
+		}
+	}
+}
+
+func TestDeviceActionsEscapeNames(t *testing.T) {
+	var page bytes.Buffer
+	name := `Laptop "><script>alert(1)</script>`
+	require.NoError(t, templates.ExecuteTemplate(&page, "activity-devices", viewData{
+		User:    &User{Username: "alice"},
+		Devices: []deviceView{{ID: 42, Username: "alice", Name: name}},
+	}))
+	body := page.String()
+	assert.NotContains(t, body, "<script>")
+	assert.Contains(t, body, `data-device-name="Laptop &#34;&gt;&lt;script&gt;alert(1)&lt;/script&gt;"`)
+	assert.Contains(t, body, `value="Laptop &#34;&gt;&lt;script&gt;alert(1)&lt;/script&gt;"`)
+	assert.Contains(t, body, `aria-label="Rename Laptop &#34;&gt;&lt;script&gt;alert(1)&lt;/script&gt;"`)
+	assert.Contains(t, body, `name="device_id" value="42"`)
 }
 
 func TestFrontendActivityRefreshPanels(t *testing.T) {
