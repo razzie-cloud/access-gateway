@@ -14,7 +14,7 @@ import (
 )
 
 func (s *Server) listUsers(ctx context.Context) ([]User, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id,username,is_admin,created_at FROM users ORDER BY username`)
+	rows, err := s.db.QueryContext(ctx, `SELECT id,username,is_admin,disabled,created_at FROM users ORDER BY username`)
 	if err != nil {
 		return nil, err
 	}
@@ -22,7 +22,7 @@ func (s *Server) listUsers(ctx context.Context) ([]User, error) {
 	var users []User
 	for rows.Next() {
 		var u User
-		if err := rows.Scan(&u.ID, &u.Username, &u.IsAdmin, &u.CreatedAt); err != nil {
+		if err := rows.Scan(&u.ID, &u.Username, &u.IsAdmin, &u.Disabled, &u.CreatedAt); err != nil {
 			return nil, err
 		}
 		users = append(users, u)
@@ -79,8 +79,8 @@ func (s *Server) getUserByUsername(ctx context.Context, username string) (User, 
 	if !validUsername(username) {
 		return u, sql.ErrNoRows
 	}
-	err := s.db.QueryRowContext(ctx, `SELECT id,username,is_admin,created_at FROM users
- WHERE lower(username COLLATE "C")=$1`, canonicalUsername(username)).Scan(&u.ID, &u.Username, &u.IsAdmin, &u.CreatedAt)
+	err := s.db.QueryRowContext(ctx, `SELECT id,username,is_admin,disabled,created_at FROM users
+ WHERE lower(username COLLATE "C")=$1`, canonicalUsername(username)).Scan(&u.ID, &u.Username, &u.IsAdmin, &u.Disabled, &u.CreatedAt)
 	return u, err
 }
 
@@ -109,6 +109,9 @@ func (s *Server) completeDeviceLogin(ctx context.Context, sid, token string, use
 		return false, err
 	}
 	defer tx.Rollback()
+	if err := lockEnabledUser(ctx, tx, user.ID); err != nil {
+		return false, err
+	}
 	var deviceID int64
 	if err := tx.QueryRowContext(ctx, `SELECT id FROM webauthn_credentials WHERE user_id=$1 AND credential_id=$2 FOR UPDATE`, user.ID, c.ID).Scan(&deviceID); err != nil {
 		return false, err

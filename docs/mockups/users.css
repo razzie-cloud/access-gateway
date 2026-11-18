@@ -1,0 +1,35 @@
+/* Users proposal: separate identity columns and confirmed access changes. */
+#users .section-heading { align-items: flex-start; }
+#users h2 { display: flex; align-items: center; gap: .45rem; }
+#users h2 .badge { margin: 0; }
+.users-table { width: 100%; table-layout: fixed; }
+.users-table th,.users-table td { vertical-align: middle; }
+.users-table thead th:nth-child(1) { width: 17%; }
+.users-table thead th:nth-child(2) { width: 43%; }
+.users-table thead th:nth-child(3) { width: 23%; }
+.users-table thead th:nth-child(4) { width: 17%; }
+.users-table tbody th { overflow-wrap: anywhere; }
+.users-table code { padding: 0; background: transparent; font-size: .73rem; overflow-wrap: anywhere; }
+.users-table .badge { margin: 0; }
+.user-enabled { display: flex; align-items: center; gap: .45rem; margin: 0; font-size: .75rem; white-space: nowrap; }
+.user-enabled input[role="switch"] { flex-shrink: 0; margin: 0; padding: 0; width: 2.25rem; height: 1.25rem; }
+#users .card-caption { margin: 0; }
+#users-feedback:not(:empty) { padding: 0 1.4rem 1rem; }
+#users-feedback .notice { margin: 0; }
+#disable-user-dialog header h2 { margin: 0; }
+#disable-user-dialog footer button { margin: 0; }
+#disable-user-dialog ul { padding-left: 1.2rem; font-size: .9rem; }
+#disable-user-dialog strong { overflow-wrap: anywhere; }
+@media (max-width: 760px) {
+  .users-table thead th:nth-child(1) { width: 22%; }
+  .users-table thead th:nth-child(2) { width: 34%; }
+  .users-table thead th:nth-child(3) { width: 24%; }
+  .users-table thead th:nth-child(4) { width: 20%; }
+  .users-table th,.users-table td { padding: .8rem .5rem; }
+  .users-table thead th { font-size: .6rem; }
+  .users-table tbody th { font-size: .75rem; }
+  .users-table code { font-size: .65rem; }
+  .users-table .badge { font-size: .6rem; padding: .15rem .3rem; white-space: normal; }
+  .user-enabled { flex-direction: column; align-items: flex-start; gap: .35rem; font-size: .65rem; }
+  #users-feedback:not(:empty) { padding-inline: 1.1rem; }
+}

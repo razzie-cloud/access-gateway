@@ -10,6 +10,7 @@ type User struct {
 	ID        []byte `db:",primary"`
 	Username  string
 	IsAdmin   bool
+	Disabled  bool
 	CreatedAt int64
 }
 

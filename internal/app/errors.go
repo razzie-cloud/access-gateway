@@ -176,6 +176,9 @@ func (s *Server) writeError(w http.ResponseWriter, r *http.Request, status int, 
 		} else if r.URL.Path == "/ui/devices/rename" || r.URL.Path == "/ui/devices/remove" {
 			w.Header().Set("HX-Retarget", "#devices-feedback")
 			w.Header().Set("HX-Reswap", "innerHTML")
+		} else if r.URL.Path == "/ui/users/access" {
+			w.Header().Set("HX-Retarget", "#users-feedback")
+			w.Header().Set("HX-Reswap", "innerHTML")
 		}
 	} else {
 		// The proxy may display this page on any protected app's origin. Only the

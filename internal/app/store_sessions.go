@@ -39,6 +39,7 @@ type sessionStore interface {
 	ListSessions(context.Context) ([]sessionSummary, error)
 	DeleteSession(context.Context, string, string) error
 	DeleteAppSessions(context.Context, []string) error
+	RevokeUserSessions(context.Context, string) error
 	Close() error
 }
 

@@ -391,6 +391,80 @@ document.addEventListener("htmx:afterSettle", event => {
   });
 })();
 
+// User access stays at its committed state until the server refreshes it. HTMX
+// owns the POST and native-confirm fallback; this adds the reviewed dialog.
+(() => {
+  let confirmation;
+  const requests = new WeakMap();
+  const selections = new WeakMap();
+  document.addEventListener("change", event => {
+    const input = event.target.closest("[data-user-switch]");
+    if (input) input.checked = input.defaultChecked;
+  }, true);
+  document.addEventListener("htmx:confirm", event => {
+    const form = event.detail.elt.closest("[data-user-access]");
+    if (!form || !event.detail.question) return;
+    const dialog = document.getElementById("disable-user-dialog");
+    if (!dialog) return;
+    event.preventDefault();
+    confirmation = { form, issue: event.detail.issueRequest };
+    dialog.querySelector("[data-disable-username]").textContent = form.dataset.username;
+    dialog.showModal();
+    dialog.querySelector("[data-cancel-disable-user]").focus();
+  });
+  document.addEventListener("click", event => {
+    if (!event.target.closest("[data-confirm-disable-user], [data-cancel-disable-user]")) return;
+    const pending = confirmation;
+    confirmation = null;
+    event.target.closest("dialog").close();
+    if (!pending?.form.isConnected) return;
+    pending.form.querySelector("[data-user-switch]").focus({ preventScroll: true });
+    if (event.target.closest("[data-confirm-disable-user]")) pending.issue(true);
+  });
+  document.addEventListener("close", event => {
+    if (event.target.id === "disable-user-dialog" && !event.target.open) confirmation = null;
+  }, true);
+  document.addEventListener("htmx:beforeRequest", event => {
+    const form = event.detail.elt.closest("[data-user-access]");
+    if (!form) return;
+    requests.set(event.detail.xhr, form.querySelector("[data-user-switch]").id);
+    selections.set(event.detail.xhr, [...document.querySelectorAll('.session-app-form input[name="session_id"]:checked')].map(input => input.value));
+  });
+  document.addEventListener("htmx:afterSwap", event => {
+    const selected = selections.get(event.detail.xhr);
+    if (!selected) return;
+    document.querySelectorAll('.session-app-form input[name="session_id"]').forEach(input => {
+      if (!input.disabled && selected.includes(input.value)) {
+        input.checked = true;
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+    });
+  });
+  document.addEventListener("htmx:afterSettle", event => {
+    const id = requests.get(event.detail.xhr);
+    requests.delete(event.detail.xhr);
+    selections.delete(event.detail.xhr);
+    if (id && document.activeElement === document.body) document.getElementById(id)?.focus({ preventScroll: true });
+  });
+  document.addEventListener("htmx:sendError", event => {
+    if (!event.detail.elt.closest("[data-user-access]")) return;
+    const node = document.createElement("p");
+    node.className = "notice";
+    node.setAttribute("role", "alert");
+    node.textContent = "Unable to reach the gateway. Refresh Users to check their current state before retrying.";
+    document.getElementById("users-feedback")?.replaceChildren(node);
+  });
+  document.addEventListener("htmx:afterRequest", event => {
+    if (event.detail.xhr.status !== 0) return;
+    const id = requests.get(event.detail.xhr);
+    requests.delete(event.detail.xhr);
+    selections.delete(event.detail.xhr);
+    if (id) requestAnimationFrame(() => {
+      if (document.activeElement === document.body) document.getElementById(id)?.focus({ preventScroll: true });
+    });
+  });
+})();
+
 // Orient navigation within long pages and after server-rendered HTMX updates.
 (() => {
   let highlighted, timeout;

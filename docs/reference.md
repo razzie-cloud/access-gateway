@@ -178,7 +178,9 @@ independently for each list. Heading counters reflect the displayed records.
 Refresh retains the selected account and preserves the other panel's drafts and
 app selections. Device/session changes and user creation retain both selections;
 a fresh account-page load without filter parameters defaults to the current user.
-The Users table continues to list all accounts and UUIDs.
+The Users table lists all accounts in separate **Name**, **UUID**, **Role**, and
+**Enabled** columns. Its description reads “The people who can sign in to your
+cloud.” UUIDs wrap within their column on small screens.
 
 Filtering runs on the server. Admin activity requests accept `devices_user` and
 `sessions_user` as account UUIDs or the literal `all`; omitted values mean the
@@ -229,6 +231,39 @@ Existing passkeys start as **Unnamed device** and can be renamed. Older sessions
 show **Unknown device** until the user signs in again. While those sessions are
 live, their account's devices remain protected from removal. End the older
 sessions from a new sign-in to identify and manage individual devices.
+
+### Disable or re-enable a user
+
+Administrators can turn off another user's **Enabled** switch. **Disable user?**
+names the account and warns that every gateway/app session will be revoked and
+further login attempts blocked until re-enabled. Cancel or Escape leaves access
+unchanged; confirmation saves the change. You cannot disable your own account.
+
+Disabled users cannot use existing gateway or app sessions, complete passkey or
+one-time-link login, enroll a device, or receive a new registration link. Their
+account, passkeys and unused links are retained. Switching **Enabled** back on
+allows a fresh login; it does not restore revoked sessions. Disabled accounts
+remain visible in administrator activity filters and the Users table.
+
+`POST /ui/users/access` accepts a `user_id` UUID and exactly one `enabled` value,
+`true` or `false`. The route requires a live administrator session and the usual
+Origin check. User-row locks coordinate login/enrollment and access changes,
+including requests on other replicas. Actor/target locks use UUID order and
+recheck the actor's live admin status; concurrent administrators cannot disable
+each other and leave no active administrator.
+
+PostgreSQL stores disabled state. Redis cleanup removes gateway sessions first,
+then their app sessions and pending grants. If cleanup fails, the user remains
+disabled and the UI reports incomplete cleanup. Re-enabling must finish cleanup
+before access is restored. An interrupted cleanup can leave unusable child
+records until their TTL expires; they cannot authorize access without a live
+gateway parent. A request/commit failure asks you to refresh Users and check the
+authoritative state before retrying. Existing account and forward-auth requests
+always check PostgreSQL, so remaining Redis records cannot bypass disabling.
+
+The initial login response for a disabled username uses the same padded decoy
+shape as an unknown account. Authentication errors do not disclose disabled
+status; existing-account link actions use the usual unavailable-link response.
 
 ## Operational notes
 

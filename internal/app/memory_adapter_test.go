@@ -139,3 +139,20 @@ func (m memorySessionStore) DeleteAppSessions(_ context.Context, ids []string) e
 	}
 	return nil
 }
+
+func (m memorySessionStore) RevokeUserSessions(_ context.Context, username string) error {
+	m.mem.mu.Lock()
+	defer m.mem.mu.Unlock()
+	for token, auth := range m.mem.auth {
+		if canonicalUsername(auth.username) != canonicalUsername(username) {
+			continue
+		}
+		delete(m.mem.auth, token)
+		for appToken, app := range m.mem.apps {
+			if app.parent == token {
+				delete(m.mem.apps, appToken)
+			}
+		}
+	}
+	return nil
+}

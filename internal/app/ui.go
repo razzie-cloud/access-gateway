@@ -22,6 +22,8 @@ import (
 var templates = template.Must(template.ParseFS(web.Assets, "templates.html"))
 
 type viewData struct {
+	UsersMessage      string
+	UsersError        string
 	HeaderFragment    bool
 	LandingOrigin     string
 	GatewayOrigin     string
@@ -271,6 +273,10 @@ func (s *Server) handleCreateLink(w http.ResponseWriter, r *http.Request) {
 		user, err = s.getUserByUsername(r.Context(), target)
 		if err != nil {
 			s.writeError(w, r, 404, "User not found")
+			return
+		}
+		if user.Disabled {
+			s.writeError(w, r, 409, "Enable this user before issuing a registration link")
 			return
 		}
 	}

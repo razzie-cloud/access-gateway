@@ -138,3 +138,77 @@ func (s *redisSessions) deleteSessions(ctx context.Context, kind string, ids []s
 	}
 	return nil
 }
+
+// The caller holds the user's PostgreSQL row exclusively, preventing new
+// gateway logins. Remove gateway parents before scanning children: Redis's
+// atomic SSO scripts cannot create an app session or grant after its parent is
+// deleted. Orphaned children from an interrupted sweep remain unusable and
+// expire normally; a retry always removes every remaining live gateway login.
+func (s *redisSessions) RevokeUserSessions(ctx context.Context, username string) error {
+	parents := make(map[string]bool)
+	var authKeys []string
+	if err := s.scanSessionKeys(ctx, "auth", func(key string, record sessionMetadata) error {
+		if canonicalUsername(record.Username) == canonicalUsername(username) {
+			parents[strings.TrimPrefix(key, s.prefix+"auth:")] = true
+			authKeys = append(authKeys, key)
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	if err := s.deleteSessionKeys(ctx, authKeys); err != nil {
+		return err
+	}
+	for _, kind := range []string{"app", "grant"} {
+		var keys []string
+		if err := s.scanSessionKeys(ctx, kind, func(key string, record sessionMetadata) error {
+			if parents[record.Parent] {
+				keys = append(keys, key)
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+		if err := s.deleteSessionKeys(ctx, keys); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *redisSessions) scanSessionKeys(ctx context.Context, kind string, visit func(string, sessionMetadata) error) error {
+	var cursor uint64
+	for {
+		keys, next, err := s.client.Scan(ctx, cursor, s.prefix+kind+":*", 100).Result()
+		if err != nil {
+			return sessionStoreError(err)
+		}
+		for _, key := range keys {
+			record, _, ok, err := s.sessionMetadata(ctx, key)
+			if err != nil {
+				return err
+			}
+			if ok {
+				if err := visit(key, record); err != nil {
+					return err
+				}
+			}
+		}
+		cursor = next
+		if cursor == 0 {
+			return nil
+		}
+	}
+}
+
+func (s *redisSessions) deleteSessionKeys(ctx context.Context, keys []string) error {
+	for len(keys) > 0 {
+		batch := keys[:min(100, len(keys))]
+		s.cache.delete(batch...)
+		if err := s.client.Del(ctx, batch...).Err(); err != nil {
+			return sessionStoreError(err)
+		}
+		keys = keys[len(batch):]
+	}
+	return nil
+}

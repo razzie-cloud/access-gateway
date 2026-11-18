@@ -33,7 +33,7 @@ func TestRoutesRejectWrongMethod(t *testing.T) {
 		{"POST", "/ui/activity"}, {"GET", "/ui/devices/rename"}, {"GET", "/ui/devices/remove"}, {"GET", "/ui/sessions/remove"}, {"GET", "/ui/sessions/apps/remove"},
 		{"POST", "/api/bootstrap"}, {"POST", "/api/me"},
 		{"POST", "/forward_auth"}, {"POST", "/forward_auth/admin"}, {"POST", "/auth/authorize"},
-		{"GET", "/ui/users"}, {"GET", "/ui/links"}, {"GET", "/ui/logout"},
+		{"GET", "/ui/users/access"}, {"GET", "/ui/users"}, {"GET", "/ui/links"}, {"GET", "/ui/logout"},
 		{"GET", "/api/register/begin"}, {"GET", "/api/register/finish"}, {"GET", "/api/register/link"},
 		{"GET", "/api/login/begin"}, {"GET", "/api/login/finish"}, {"GET", "/api/login/link"}, {"GET", "/api/logout"},
 		{"POST", "/ui/registration-options"},
@@ -117,7 +117,7 @@ func TestFinishRequiresLiveCeremony(t *testing.T) {
 }
 
 func TestMeAndLogout(t *testing.T) {
-	s := unitServer()
+	s := userSessionServer(t)
 	testMemory(s).PutAuth("valid", "alice")
 	testMemory(s).PutAuth("other", "bob")
 	testMemory(s).auth["expired"] = authEntry{username: "alice", exp: time.Now().Add(-time.Minute)}

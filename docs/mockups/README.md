@@ -6,7 +6,7 @@ Serve the **Razzie Cloud parent directory** with
 
 | Screen | File | Review focus |
 | --- | --- | --- |
-| Compact devices / administrator activity | [activity.html](activity.html) | Inline pencil rename, grouped cancel/save icons, device trash and per-list user filters |
+| User access / administrator activity | [activity.html](activity.html#users) | Separate name/UUID columns, enabled switches and confirmed user disabling; compact devices and per-list filters |
 | Compact devices / regular-user activity | [activity-member.html](activity-member.html) | Own devices/sessions with inline rename and trash, without administration controls |
 | Administrator overview | [index.html](index.html) | Devices and sessions beside enrollment/user creation |
 | Grouped sessions | [sessions.html](sessions.html) | One row per gateway login, selectable app sessions and gateway trash action |
@@ -16,6 +16,58 @@ Serve the **Razzie Cloud parent directory** with
 | Administrator access denied | [admin-denied.html](admin-denied.html) | Centered branded 403 page on a protected app hostname |
 
 [Account screenshot](index-desktop.png) · [Sign-in screenshot](login-desktop.png)
+
+## User access proposal
+
+Open the [light Users preview](activity.html#users) or
+[dark Users preview](dark/activity.html#users). The Users panel adds the short
+description **The people who can sign in to your cloud.** and four columns:
+**Name**, **UUID**, **Role**, and **Enabled**. UUIDs wrap within their own column
+on narrow screens. Each PicoCSS switch includes an On/Off label. The signed-in
+administrator's switch is protected, with an explanation below the table.
+
+Switching a user off opens **Disable user?**, naming that account and warning
+that all gateway/app sessions will be deleted, signing them out everywhere,
+and all further login attempts will be blocked until re-enabled. The account
+and passkeys remain. Cancel receives initial focus; Cancel or Escape leaves
+the switch on and returns focus. Only confirmation turns it off. Re-enabling
+is immediate and explicitly does not restore deleted sessions.
+
+`users.css` and `users.js` are mockup-only. Authored HTMX receipts use local
+GETs without form values. The sample removes the disabled user's session rows,
+including after scoped refresh or filter changes. Re-enabling leaves those
+sessions deleted. A full reload or theme navigation resets all sample state.
+Device badges and removal protection remain fixed fixtures, as in the existing
+compact-device proposal. Request failures retain the prior user state and allow
+retry. These remain sample fixtures. Production now implements the reviewed controls,
+with durable disabled state, real revocation and authentication checks; see
+[disable or re-enable a user](../reference.md#disable-or-re-enable-a-user).
+
+Screenshots: [light desktop](users-desktop.png),
+[dark desktop](dark/users-desktop.png), [light mobile](users-mobile.png),
+[dark mobile](dark/users-mobile.png), [light warning](users-disable-desktop.png),
+[dark warning](dark/users-disable-desktop.png),
+[light mobile warning](users-disable-mobile.png),
+[dark mobile warning](dark/users-disable-mobile.png),
+[light disabled state](users-disabled-desktop.png),
+[dark disabled state](dark/users-disabled-desktop.png),
+[light mobile disabled state](users-disabled-mobile.png), and
+[dark mobile disabled state](dark/users-disabled-mobile.png).
+
+Verification: headless Brave/Chromium checked both changed full pages at
+320/390/768/1440 pixels (eight layouts), table/counter/switch alignment, column
+and page overflow, loaded images, one primary heading, keyboard activation,
+Cancel/Escape/focus return, confirmation, session counts and removal, retained
+revocation after filter/refresh swaps, re-enabling, device editing, and matching
+theme navigation. Member pages still omit administration controls. Deliberately
+blocked disable and enable requests retained the prior state and passed retry.
+All 324 HTTP requests were local GETs without submitted values; no unexpected
+browser/CSP errors or HTTP failures occurred. Twelve screenshots were captured
+and visually reviewed. Relative references and Git whitespace checks passed.
+Standalone Node syntax checking was unavailable because Node is not installed;
+the script loaded and executed successfully in Chromium.
+No Go build/tests, real authentication, publication or deployment ran for this
+static-only proposal.
 
 ## Compact device actions proposal
 

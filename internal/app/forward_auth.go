@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -217,6 +218,10 @@ func (s *Server) forwardAuth(w http.ResponseWriter, r *http.Request, requireAdmi
 				s.writeError(w, r, http.StatusForbidden, "Administrator access required")
 				return
 			}
+			if user.Disabled {
+				s.writeError(w, r, http.StatusUnauthorized, "Sign in first")
+				return
+			}
 			if strings.ContainsFunc(user.Username, func(r rune) bool { return r < 32 || r == 127 }) {
 				logging.FailKind(r.Context(), slog.LevelError, "forward_auth", "invalid_username_header")
 				s.writeError(w, r, http.StatusInternalServerError, "User name cannot be sent as an HTTP header")
@@ -274,6 +279,16 @@ func (s *Server) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 	}
 	cookie, err := r.Cookie("auth")
 	if err == nil {
+		// Do not issue SSO grants for disabled accounts, including when Redis
+		// cleanup was incomplete. Redemption still requires a live parent.
+		if _, err := s.currentUser(r); err != nil && !errors.Is(err, http.ErrNoCookie) && !errors.Is(err, sql.ErrNoRows) {
+			logging.Fail(r.Context(), slog.LevelError, "application", err)
+			s.writeError(w, r, http.StatusServiceUnavailable, "Unable to validate user")
+			return
+		} else if err != nil {
+			s.render(w, r, http.StatusOK, "page", viewData{LandingOrigin: s.cfg.LandingOrigin})
+			return
+		}
 		code, ok, err := s.sessions.authorizeAppLogin(r.Context(), flowID, cookie.Value)
 		if err != nil {
 			logging.Fail(r.Context(), slog.LevelError, "redis", err)
@@ -323,6 +338,25 @@ func (s *Server) handleAppCallback(w http.ResponseWriter, r *http.Request, origi
 	}
 	if !ok {
 		s.writeError(w, r, http.StatusBadRequest, "Invalid or expired sign-in; return to the app and try again")
+		return
+	}
+	// A previous revocation may have failed to reach Redis. Check PostgreSQL
+	// before disclosing the new cookie, even though app access checks it again.
+	username, live, err := s.sessions.getAppAuth(r.Context(), token, origin)
+	var user User
+	if err == nil && live {
+		user, err = s.getUserByUsername(r.Context(), username)
+	}
+	if err != nil || !live || user.Disabled {
+		cleanup, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		_ = s.sessions.DeleteSession(cleanup, "Application", hashToken(token))
+		cancel()
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			logging.Fail(r.Context(), slog.LevelError, "application", err)
+			s.writeError(w, r, http.StatusServiceUnavailable, "Unable to validate user")
+		} else {
+			s.writeError(w, r, http.StatusUnauthorized, "Sign in first")
+		}
 		return
 	}
 	// Persist across browser restarts without starting a fresh auth lifetime.

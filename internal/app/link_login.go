@@ -85,6 +85,12 @@ func (s *Server) completeLinkLogin(ctx context.Context, linkToken string) (strin
 	if used.Valid || expires <= time.Now().Unix() {
 		return "", User{}, errRegistrationUnavailable
 	}
+	if err := lockEnabledUser(ctx, tx, user.ID); err != nil {
+		if errors.Is(err, errUserDisabled) || errors.Is(err, sql.ErrNoRows) {
+			return "", User{}, errRegistrationUnavailable
+		}
+		return "", User{}, err
+	}
 	if _, err = tx.ExecContext(ctx, `UPDATE registration_links SET used_at=$2 WHERE token_hash=$1`, linkHash, time.Now().Unix()); err != nil {
 		return "", User{}, err
 	}

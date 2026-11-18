@@ -122,7 +122,7 @@ func TestForwardAuthWildcardOrigins(t *testing.T) {
 }
 
 func TestWildcardAppLoginBindsConcreteOrigin(t *testing.T) {
-	s := unitServer()
+	s := userSessionServer(t)
 	s.cfg.ForwardAuthOrigins = []string{"https://*.example.net"}
 	testMemory(s).PutAuth("central", "alice")
 	const otherOrigin = "https://other.example.net"
@@ -221,7 +221,7 @@ func TestForwardAuthStartsLogin(t *testing.T) {
 }
 
 func TestAuthorizeUsesExistingGatewaySession(t *testing.T) {
-	s := unitServer()
+	s := userSessionServer(t)
 	s.cfg.ForwardAuthOrigins = []string{testAppOrigin}
 	testMemory(s).PutAuth("central", "alice")
 	authorize, state := startAppLogin(t, s, testAppOrigin, "/notes")
@@ -255,7 +255,7 @@ func TestAppCookieUsesRemainingGatewayLifetime(t *testing.T) {
 	for _, origin := range []string{testAppOrigin, "http://files.localhost:8082"} {
 		for _, remaining := range []time.Duration{2 * time.Hour, 500 * time.Millisecond} {
 			t.Run(origin+"/"+remaining.String(), func(t *testing.T) {
-				s := unitServer()
+				s := userSessionServer(t)
 				s.cfg.ForwardAuthOrigins = []string{origin}
 				testMemory(s).auth["central"] = authEntry{username: "alice", exp: time.Now().Add(remaining)}
 				authorize, state := startAppLogin(t, s, origin, "/notes")
@@ -284,7 +284,7 @@ func TestAppCookieUsesRemainingGatewayLifetime(t *testing.T) {
 }
 
 func TestAppCallbackRequiresBrowserState(t *testing.T) {
-	s := unitServer()
+	s := userSessionServer(t)
 	s.cfg.ForwardAuthOrigins = []string{testAppOrigin, "https://other.example.org"}
 	testMemory(s).PutAuth("central", "alice")
 	authorize, state := startAppLogin(t, s, testAppOrigin, "/")
@@ -326,7 +326,7 @@ func TestAppCallbackRequiresBrowserState(t *testing.T) {
 func TestForwardAuthLocalCookie(t *testing.T) {
 	for _, origin := range []string{"http://127.0.0.1:8081", "http://files.localhost:8082"} {
 		t.Run(origin, func(t *testing.T) {
-			s := unitServer()
+			s := userSessionServer(t)
 			s.cfg.ForwardAuthOrigins = []string{origin}
 			testMemory(s).PutAuth("central", "alice")
 			authorize, state := startAppLogin(t, s, origin, "/notes?sort=latest")

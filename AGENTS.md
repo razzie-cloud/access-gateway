@@ -175,6 +175,18 @@ absolute registration URLs from untrusted Host or forwarded headers.
   before releasing the row lock. Reject removal while any session uses the
   device; legacy sessions without a device ID protect all of that user's devices.
 - No link deletion, role editing, or account recovery UI exists yet.
+- Users have a durable `disabled` flag (migration `00006`, initially false).
+  Admin-only POST `/ui/users/access` takes `user_id` (UUID) and `enabled`
+  (`true`/`false`). Never allow self-disable. Lock actor/target rows in UUID order
+  and recheck the actor's active admin role. Login/enrollment completion holds a
+  shared user-row lock before creating credentials/sessions; disabling takes the
+  exclusive lock and revokes all gateway logins before scanning app/grant children.
+  Failed Redis cleanup still commits disabled=true; enabling requires successful
+  cleanup and never restores old sessions. Gateway identity, `/api/me`, SSO
+  grant/callback and forward-auth checks reject disabled users from PostgreSQL.
+  Named login uses the normal padded decoy response for disabled accounts;
+  link login/enrollment keeps the generic unavailable-link response. Existing
+  passkeys, unused links and account data remain available after re-enabling.
 
 ## HTTP and sessions
 
@@ -211,6 +223,12 @@ absolute registration URLs from untrusted Host or forwarded headers.
   devices. Removing an auth record revokes every app session derived from it.
 - POST /ui/users: admin-only account creation (`username` form field); returns
   refreshed account HTML on success using HX-Retarget. Unique usernames return 409.
+- The Users table separates Name/UUID/Role/Enabled. Pico switches confirm
+  disabling with a native dialog (Cancel initial focus, Escape and focus return).
+  The switch retains its committed state until the response; errors target
+  `users-feedback`. Partial cleanup responses refresh authoritative access state,
+  even if only the Users panel can load. Full activity swaps retain independent
+  scope filters, unrelated device drafts and surviving app-session selections.
 - POST /ui/links: returns a link, inline QR PNG, download link, and expiry.
 - POST /ui/logout: clears auth and returns the signed-out fragment.
 - GET /api/bootstrap, /api/me; POST /api/register/begin, /api/register/finish,

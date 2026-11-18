@@ -61,7 +61,7 @@ func (s *Server) loginCredentials(ctx context.Context, username string) ([]proto
  SELECT length,max(slots) AS slots FROM counts GROUP BY length
 ), selected AS (
  SELECT c.user_id,c.credential_id FROM webauthn_credentials c JOIN users u ON u.id=c.user_id
- WHERE lower(u.username COLLATE "C")=$1
+ WHERE lower(u.username COLLATE "C")=$1 AND NOT u.disabled
 )
 SELECT p.length,p.slots,s.user_id,s.credential_id FROM profile p
 LEFT JOIN selected s ON octet_length(s.credential_id)=p.length

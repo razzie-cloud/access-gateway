@@ -34,6 +34,7 @@ func (s *Server) routes() {
 	handle("/register", s.handlePage)
 	handle("/ui/state", s.handleState)
 	handle("/ui/users", s.handleCreateUser)
+	handle("/ui/users/access", s.handleUserAccess)
 	handle("/ui/admin", s.handleAdmin)
 	handle("/ui/activity", s.handleActivity)
 	handle("/ui/devices/rename", s.handleRenameDevice)
@@ -412,6 +413,10 @@ func (s *Server) handleLoginFinish(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	if u.Disabled {
+		s.rejectLogin(w, r, claimedUsername, "invalid assertion or unknown credential")
+		return
+	}
 	user, err := s.loadWebAuthnUser(ctx, u)
 	if err != nil {
 		logging.Fail(r.Context(), slog.LevelError, "application", err)
@@ -434,8 +439,8 @@ func (s *Server) handleLoginFinish(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, errSessionStore) {
 			logging.Fail(r.Context(), slog.LevelError, "redis", err)
 			s.writeError(w, r, 503, "session storage unavailable")
-		} else if errors.Is(err, sql.ErrNoRows) {
-			s.rejectLogin(w, r, claimedUsername, "device removed")
+		} else if errors.Is(err, sql.ErrNoRows) || errors.Is(err, errUserDisabled) {
+			s.rejectLogin(w, r, claimedUsername, "invalid assertion or unknown credential")
 		} else {
 			logging.Fail(r.Context(), slog.LevelError, "application", err)
 			s.writeError(w, r, 500, "failed to complete login")
@@ -470,6 +475,17 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 		logging.Fail(r.Context(), slog.LevelError, "redis", err)
 		s.writeError(w, r, 503, "session storage unavailable")
 		return
+	}
+	if ok {
+		user, err := s.getUserByUsername(r.Context(), u)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			logging.Fail(r.Context(), slog.LevelError, "postgres", err)
+			s.writeError(w, r, 503, "unable to validate user")
+			return
+		}
+		if err != nil || user.Disabled {
+			u, ok = "", false
+		}
 	}
 	writeJSON(w, 200, map[string]any{"authenticated": ok, "username": u})
 }

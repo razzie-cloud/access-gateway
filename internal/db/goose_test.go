@@ -62,7 +62,7 @@ func TestConcurrentMigrations(t *testing.T) {
 			var applied int
 			err = admin.QueryRowContext(t.Context(), "SELECT count(*) FROM "+schema+".goose_db_version WHERE is_applied AND version_id > 0").Scan(&applied)
 			require.NoError(t, err)
-			require.Equal(t, 5, applied)
+			require.Equal(t, 6, applied)
 		})
 	}
 }

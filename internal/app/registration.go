@@ -52,7 +52,7 @@ func (s *Server) registrationFromLink(ctx context.Context, token string) (regist
 	registration := registrationContext{LinkHash: hashToken(token)}
 	err := s.db.QueryRowContext(ctx, `SELECT l.user_id,COALESCE(u.username,''),COALESCE(u.is_admin,FALSE),COALESCE(u.created_at,0)
  FROM registration_links l LEFT JOIN users u ON u.id=l.user_id
- WHERE l.token_hash=$1 AND l.used_at IS NULL AND l.expires_at>$2`, registration.LinkHash, time.Now().Unix()).Scan(
+ WHERE l.token_hash=$1 AND l.used_at IS NULL AND l.expires_at>$2 AND (l.user_id IS NULL OR NOT u.disabled)`, registration.LinkHash, time.Now().Unix()).Scan(
 		&registration.User.ID, &registration.User.Username, &registration.User.IsAdmin, &registration.User.CreatedAt)
 	registration.NewUser = registration.User.ID == nil
 	return registration, err
@@ -93,6 +93,11 @@ func (s *Server) completeRegistration(ctx context.Context, registration registra
 				}
 				return err
 			}
+		} else if err := lockEnabledUser(ctx, tx, registration.User.ID); err != nil {
+			if errors.Is(err, errUserDisabled) || errors.Is(err, sql.ErrNoRows) {
+				return errRegistrationUnavailable
+			}
+			return err
 		}
 		if _, err = tx.ExecContext(ctx, `UPDATE registration_links SET used_at=$2,user_id=$3 WHERE token_hash=$1`, registration.LinkHash, time.Now().Unix(), registration.User.ID); err != nil {
 			return err

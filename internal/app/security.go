@@ -63,5 +63,9 @@ func (s *Server) currentUser(r *http.Request) (User, error) {
 	if !ok {
 		return User{}, http.ErrNoCookie
 	}
-	return s.getUserByUsername(r.Context(), username)
+	user, err := s.getUserByUsername(r.Context(), username)
+	if err == nil && user.Disabled {
+		return User{}, http.ErrNoCookie
+	}
+	return user, err
 }

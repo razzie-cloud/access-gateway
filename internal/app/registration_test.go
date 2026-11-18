@@ -123,6 +123,19 @@ func postgresServer(t *testing.T) *Server {
 	return s
 }
 
+// Session-handler tests verify durable account state as well as session liveness.
+// Keep their in-memory session fixtures with an isolated real user table.
+func userSessionServer(t *testing.T) *Server {
+	t.Helper()
+	database := postgresServer(t)
+	s := unitServer()
+	s.db = database.db
+	id := uuid.New()
+	_, err := s.db.Exec(`INSERT INTO users(id,username,is_admin,created_at) VALUES($1,'alice',FALSE,0)`, id[:])
+	require.NoError(t, err)
+	return s
+}
+
 func addUser(t *testing.T, s *Server, username string, admin bool) User {
 	t.Helper()
 	id := uuid.New()
