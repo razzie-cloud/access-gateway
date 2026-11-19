@@ -92,6 +92,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Referrer-Policy", "same-origin")
 	w.WriteHeader(status)
 	_, _ = w.Write(buf.Bytes())
 }

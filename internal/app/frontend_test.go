@@ -262,3 +262,21 @@ func TestRegistrationModeFragments(t *testing.T) {
 	assert.Equal(t, "#status", w.Header().Get("HX-Retarget"))
 	assert.Equal(t, "innerHTML", w.Header().Get("HX-Reswap"))
 }
+
+func TestRenderedUIReferrerPolicy(t *testing.T) {
+	s := unitServer()
+	// /register renders without a database or authenticated session.
+	w := httptest.NewRecorder()
+	s.handler().ServeHTTP(w, httptest.NewRequest("GET", "/register", nil))
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "same-origin", w.Result().Header.Get("Referrer-Policy"))
+	assert.Contains(t, w.Body.String(), `id="device-registration"`)
+	// Successful fragments, including non-200 UI responses, override middleware.
+	s.mux.HandleFunc("/ui/test-render", func(w http.ResponseWriter, r *http.Request) {
+		s.render(w, r, http.StatusConflict, "activity", viewData{User: &User{Username: "alice"}})
+	})
+	w = httptest.NewRecorder()
+	s.handler().ServeHTTP(w, httptest.NewRequest("GET", "/ui/test-render", nil))
+	require.Equal(t, http.StatusConflict, w.Code)
+	assert.Equal(t, "same-origin", w.Result().Header.Get("Referrer-Policy"))
+}

@@ -492,8 +492,13 @@ app requests (401); database failures deny access (503).
 Pending flows expire after ten minutes; codes expire after one minute and are
 consumed atomically once. Codes are bound to the initiating browser's state cookie
 and original app origin. Keep callback query strings out of proxy access logs;
-session tokens themselves never appear in URLs. All auth responses use no-store
-and no-referrer. Simultaneous app sign-ins use separate state cookies.
+session tokens themselves never appear in URLs. All auth responses use no-store.
+Authentication protocol responses, including
+JSON, callbacks, redirects and standalone errors, use no-referrer. Rendered UI
+pages and fragments use `Referrer-Policy: same-origin` so native forms retain the
+browser-generated Origin while cross-origin requests disclose no Referer.
+Same-origin requests may include their source URL; keep callback URLs out of logs.
+Simultaneous app sign-ins use separate state cookies.
 
 Redirects resume with GET; an unauthenticated POST body is not replayed. API and
 background requests should establish the app session through top-level browser

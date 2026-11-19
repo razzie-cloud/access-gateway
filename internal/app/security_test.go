@@ -23,6 +23,7 @@ func TestHandlerRequestProtection(t *testing.T) {
 		{"foreign origin", "POST", "/api/test", "https://evil.example", "application/json", 403},
 		{"null origin", "POST", "/api/test", "null", "application/json", 403},
 		{"origin prefix", "POST", "/api/test", "https://auth.example.evil", "application/json", 403},
+		{"origin port", "POST", "/api/test", "https://auth.example:8443", "application/json", 403},
 		{"origin scheme", "POST", "/api/test", "http://auth.example", "application/json", 403},
 		{"missing media type", "POST", "/api/test", "https://auth.example", "", 415},
 		{"plain text", "POST", "/api/test", "https://auth.example", "text/plain", 415},

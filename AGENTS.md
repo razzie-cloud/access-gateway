@@ -273,8 +273,10 @@ absolute registration URLs from untrusted Host or forwarded headers.
   new-user invitations, and keep login independent of WebAuthn browser support.
 - All POSTs require an Origin header matching configured ORIGIN. /api/ POSTs also
   require application/json. Maintain these checks when adding mutation routes.
-- Responses use no-store, no-referrer, nosniff, and a self-only CSP (QR images
-  allow data:). Cookies are HttpOnly and Secure for HTTPS origins. Ceremony
+- Responses use no-store, nosniff, and a self-only CSP (QR images allow data:).
+  Rendered UI pages/fragments use same-origin referrer policy for native forms;
+  authentication protocol responses and standalone errors retain no-referrer.
+  Cookies are HttpOnly and Secure for HTTPS origins. Ceremony
   cookies are SameSite=Strict; gateway auth and app cookies use SameSite=Lax
   for top-level navigation between unrelated sites. POST Origin checks remain.
 - Redis stores ceremonies (30 minutes), auth sessions (7 days), app sessions
