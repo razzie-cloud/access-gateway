@@ -31,11 +31,7 @@ func (s *Server) listUsers(ctx context.Context) ([]User, error) {
 }
 
 func (s *Server) countUsers(ctx context.Context) (int, error) {
-	var users []User
-	if err := s.repo.FindAll(ctx, &users); err != nil {
-		return 0, err
-	}
-	return len(users), nil
+	return s.repo.Count(ctx, "users")
 }
 
 func (s *Server) getAppState(ctx context.Context, key string) (string, error) {
