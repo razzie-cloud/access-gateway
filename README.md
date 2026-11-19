@@ -74,9 +74,10 @@ Configuration, enrollment details, operations, and image publishing are in the
 
 The header logo and Razzie Cloud name link to `LANDING_ORIGIN`
 (`--landing-origin`, default `https://razzie.cloud`). Set this to the exact
-HTTP(S) origin of your landing page, without a trailing slash. The adjacent
-service name opens this app. Compose and Swarm set the landing origin for their
-local/public domain.
+HTTP(S) origin of your public landing page, without a trailing slash. Signed-in
+pages use `HOME_ORIGIN` instead when configured; sign-out updates the logo link
+back to the public landing page. The adjacent service name opens this app.
+Compose and Swarm configure both destinations for their local/public domain.
 
 Public verification keys are available at `/.well-known/paseto-keys`. Signing
 keys rotate daily in shared Redis/Valkey. See the [signed identity contract](docs/reference.md#signed-proxy-identity).

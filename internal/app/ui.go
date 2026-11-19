@@ -75,8 +75,15 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name
 	data.GatewayOrigin = strings.TrimRight(s.cfg.Origin, "/")
 	data.HeaderFragment = name == "state"
 	if data.LandingOrigin == "" {
+		data.LandingOrigin = s.cfg.LandingOrigin
+	}
+	if data.LandingOrigin == "" {
 		data.LandingOrigin = "https://razzie.cloud"
 	}
+	if data.User != nil && s.cfg.HomeOrigin != "" {
+		data.LandingOrigin = s.cfg.HomeOrigin
+	}
+	data.LandingOrigin = strings.TrimRight(data.LandingOrigin, "/")
 	var buf bytes.Buffer
 	if err := templates.ExecuteTemplate(&buf, name, data); err != nil {
 		logging.Fields(r.Context(), "template", name)

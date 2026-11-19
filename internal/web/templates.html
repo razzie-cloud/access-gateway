@@ -17,7 +17,7 @@
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
   <header class="topbar">
-    <div class="brand-group"><a class="brand" href="{{.LandingOrigin}}/"><img class="brand-mark" src="/static/razzie-cloud-logo.png" width="46" height="46" alt=""><strong>Razzie Cloud</strong></a><a class="service-name" href="/">Access Gateway</a></div>
+    <div class="brand-group" id="cloud-brand">{{template "cloud-brand" .}}</div>
     <div class="topbar-right" id="account-header">{{template "account-identity" .}}</div>
   </header>
   <main id="main">
@@ -62,10 +62,12 @@
 </body>
 </html>{{end}}
 
+{{define "cloud-brand"}}<a class="brand" href="{{.LandingOrigin}}/"><img class="brand-mark" src="/static/razzie-cloud-logo.png" width="46" height="46" alt=""><strong>Razzie Cloud</strong></a><a class="service-name" href="/">Access Gateway</a>{{end}}
+
 {{define "account-identity"}}{{if .User}}<div class="identity" aria-label="Signed-in account">{{template "icon-shield"}}<div class="identity-copy"><a class="account-link" href="{{.GatewayOrigin}}/" title="Manage your account"><strong title="{{.User.Username}}">{{.User.Username}}</strong></a>{{if .User.IsAdmin}}<span class="badge green">Administrator</span>{{end}}</div></div>{{else}}<span class="badge">{{template "icon-shield"}} {{if .Invite}}Registration link{{else}}Passkey access{{end}}</span>{{end}}{{end}}
 
 {{define "state"}}
-{{if .HeaderFragment}}<div id="account-header" hx-swap-oob="innerHTML">{{template "account-identity" .}}</div>{{end}}
+{{if .HeaderFragment}}<div id="cloud-brand" hx-swap-oob="innerHTML">{{template "cloud-brand" .}}</div><div id="account-header" hx-swap-oob="innerHTML">{{template "account-identity" .}}</div>{{end}}
 {{if .User}}
 <div class="app-layout">
   <aside class="sidebar">

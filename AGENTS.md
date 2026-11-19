@@ -41,6 +41,9 @@ linked to configured public ORIGIN, and an inline Administrator badge only for
 admins. Keep the Files/Notes CSS copies identical. Account-state responses own
 the header's HTMX out-of-band update; full pages render one header target.
 Sign out stays in the sidebar. See parent docs/brand/README.md's header contract.
+The cloud logo uses public LANDING_ORIGIN when signed out and HOME_ORIGIN when
+signed in (falling back to LANDING_ORIGIN). Account-state fragments update both
+the logo destination and identity through HTMX out-of-band swaps.
 
 **All frontend work must use HTMX and PicoCSS.** Use server-rendered HTML
 fragments for account views and management forms. Do not introduce a SPA
