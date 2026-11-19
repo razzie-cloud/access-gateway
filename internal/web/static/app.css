@@ -40,7 +40,7 @@ article>footer { margin-bottom: -1.6rem; padding-top: 1rem; padding-bottom: 1rem
 .eyebrow { font-size: .68rem; letter-spacing: .13em; font-weight: 700; color: #6b7b8e; margin: 0 0 .8rem; text-transform: uppercase; }
 .topbar { height: 78px; border-bottom: 1px solid #e3e8ee; background: #fff; display: flex; align-items: center; justify-content: space-between; padding: 0 2.1rem; gap: 1rem; }
 .brand { display: flex; align-items: center; gap: .7rem; color: #15273d; text-decoration: none; font-weight: 700; font-size: 1.22rem; letter-spacing: -.04em; }
-.brand-mark { display: block; width: 46px; height: 46px; object-fit: contain; flex-shrink: 0; }
+.brand-mark { display: block; width: 46px; height: 46px; object-fit: contain; flex-shrink: 0; transform: scale(.8); }
 .service-name { border-left: 1px solid #dfe5ec; color: #627185; padding-left: 1rem; margin-left: .4rem; font-weight: 450; font-size: .92rem; letter-spacing: 0; }
 .topbar-right { display: flex; align-items: center; gap: 1rem; }
 .topbar-right>a { font-size: .83rem; color: #526176; }

@@ -45,6 +45,7 @@ func TestAdminDeniedPageUsesConfiguredOrigins(t *testing.T) {
 			assert.Contains(t, body, `href="`+gateway+`/static/pico.min.css"`)
 			assert.Contains(t, body, `href="`+gateway+`/static/app.css"`)
 			assert.Contains(t, body, `src="`+gateway+`/static/razzie-cloud-logo.png"`)
+			assert.Contains(t, body, `rel="icon" href="`+gateway+`/static/razzie-cloud-logo-favicon.png"`)
 			for _, unwanted := range []string{"untrusted.example", "spoofed.example", "private", "<script", "<form", `style=`, `data-theme=`} {
 				assert.NotContains(t, body, unwanted)
 			}
@@ -79,6 +80,7 @@ func TestFrontendStateTransitions(t *testing.T) {
 			var page bytes.Buffer
 			require.NoError(t, templates.ExecuteTemplate(&page, "page", tc.data))
 			html := page.String()
+			assert.Contains(t, html, `rel="icon" href="/static/razzie-cloud-logo-favicon.png"`)
 			assert.Contains(t, html, `class="brand" href="http://localhost:9191/"`)
 			assert.Contains(t, html, `class="service-name" href="/">Access Gateway</a>`)
 			assert.Equal(t, tc.login, strings.Contains(html, `data-webauthn="login"`))
