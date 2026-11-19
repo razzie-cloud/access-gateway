@@ -32,6 +32,7 @@ func run() error {
 	s, err := app.NewServer(app.Config{
 		ListenAddr:         addr,
 		LandingOrigin:      cfg.LandingOrigin,
+		HomeOrigin:         cfg.HomeOrigin,
 		DatabaseURL:        cfg.PostgresURI,
 		RedisURL:           cfg.RedisURI,
 		Origin:             cfg.Origin,

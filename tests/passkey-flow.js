@@ -10,7 +10,7 @@
   const equal = (got, expected) => assert(JSON.stringify(got) === JSON.stringify(expected), `Expected ${JSON.stringify(expected)}, got ${JSON.stringify(got)}`);
   const buffer = value => Uint8Array.from(atob(value), c => c.charCodeAt(0)).buffer;
 
-  function fixture({ mode = "register", invite = true, pathname = "/register", fail, missingKey = false, nullCredential = false, newUser = false, linkLogin = false, noPublicKey = false } = {}) {
+  function fixture({ mode = "register", invite = true, pathname = "/register", fail, missingKey = false, nullCredential = false, newUser = false, linkLogin = false, noPublicKey = false, home = "" } = {}) {
     const events = {}, calls = [], prompts = [], navigations = [], refreshes = [];
     const message = { textContent: "" }, button = { disabled: false, textContent: "Create passkey" };
     const inputs = Object.fromEntries(Object.entries({ username: "untrusted-form-name", deviceName: "Phone", token: "bootstrap-secret", linkToken: "" }).map(([name, value]) => [name, { name, value, disabled: false }]));
@@ -31,7 +31,7 @@
     const mockDocument = {
       body: {}, addEventListener: (name, callback) => { events[name] = callback; },
       getElementById: id => id === "status" ? message : id === "link-token" && invite ? inputs.linkToken : id === "invitation-username" ? usernameLabel : id === "enrollment-description" ? description : id === "registration-help" ? help : id === "registration-choices" && invite ? choices : id === "enrollment-options" && invite ? options : null,
-      querySelector: () => button,
+      querySelector: selector => selector === 'meta[name="login-destination"]' ? { content: home } : button,
     };
     const mockLocation = {
       hash: "#" + "a".repeat(64), pathname,
@@ -86,6 +86,20 @@
   const paths = test => test.calls.map(call => call.path).filter(path => path !== "/api/register/link");
   const registrationAndLogin = ["/api/register/begin", "/api/register/finish", "/api/login/begin", "/api/login/finish"];
   const tests = {
+    async "direct passkey sign-in, bootstrap and invitations go home"() {
+      const home = "https://home.example.com/";
+      for (const options of [{ mode: "login", invite: false, pathname: "/" }, { invite: false, pathname: "/" }, { newUser: true }, { linkLogin: true, noPublicKey: true }]) {
+        const test = fixture({ ...options, home });
+        await test.submit();
+        equal(test.navigations, [home]);
+        equal(test.refreshes, []);
+      }
+    },
+    async "SSO keeps its requested app after sign-in with a configured home"() {
+      const test = fixture({ mode: "login", invite: false, pathname: "/auth/authorize", home: "https://home.example.com/" });
+      await test.submit();
+      equal(test.navigations, ["reload"]);
+    },
     async "one-time link login works without WebAuthn and sends only its token"() {
       const test = fixture({ linkLogin: true, noPublicKey: true });
       await test.submit();

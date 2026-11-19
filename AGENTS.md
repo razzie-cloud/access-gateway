@@ -97,6 +97,11 @@ public app origins or leading `*.` subdomain patterns, default empty (forward
 authentication disabled). Wildcards match one or more DNS labels with exact
 scheme/port; the gateway origin is always excluded. Keep requests, callbacks,
 sessions and signed audiences bound to concrete origins.
+HOME_ORIGIN (`--home-origin`) optionally sends successful direct sign-ins to an
+allowed forward-auth app origin. Preserve pending /auth/authorize flows and keep
+the signed-in gateway root accessible for account management. Empty retains the
+standalone account refresh. Cover passkey, bootstrap, invitation and link login
+redirects in tests/passkey-flow.js.
 TRUSTED_PROXIES (`--trusted-proxies`) is a comma-separated list of proxy IPs or
 CIDRs, default empty. Only trusted socket peers can supply X-Forwarded-For;
 walk the chain right to left and stop at the first untrusted address. Keep

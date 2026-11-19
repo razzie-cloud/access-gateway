@@ -26,6 +26,7 @@ type viewData struct {
 	UsersError        string
 	HeaderFragment    bool
 	LandingOrigin     string
+	LoginDestination  string
 	GatewayOrigin     string
 	Failure           *errorPage
 	NeedsRegistration bool
@@ -68,6 +69,9 @@ func (s *Server) handleRegistrationOptions(w http.ResponseWriter, r *http.Reques
 }
 
 func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name string, data viewData) {
+	if s.cfg.HomeOrigin != "" {
+		data.LoginDestination = strings.TrimRight(s.cfg.HomeOrigin, "/") + "/"
+	}
 	data.GatewayOrigin = strings.TrimRight(s.cfg.Origin, "/")
 	data.HeaderFragment = name == "state"
 	if data.LandingOrigin == "" {

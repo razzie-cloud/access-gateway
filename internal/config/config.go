@@ -14,6 +14,7 @@ import (
 type Config struct {
 	BrokerTokenFile      string `arg:"--broker-token-file,env:BROKER_TOKEN_FILE"`
 	BrokerCAFile         string `arg:"--broker-ca-file,env:BROKER_CA_FILE"`
+	HomeOrigin           string `arg:"--home-origin,env:HOME_ORIGIN" help:"Default destination after direct sign-in; must be an allowed forward-auth app origin"`
 	LandingOrigin        string `arg:"--landing-origin,env:LANDING_ORIGIN" default:"https://razzie.cloud"`
 	ServicePort          int    `arg:"--port,env:SERVICE_PORT" default:"8080"`
 	Origin               string `arg:"--origin,env:ORIGIN" default:"http://localhost:8080"`

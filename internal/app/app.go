@@ -20,6 +20,7 @@ import (
 
 type Config struct {
 	LandingOrigin string
+	HomeOrigin    string
 	ListenAddr    string
 	DatabaseURL   string
 	RedisURL      string
@@ -54,6 +55,9 @@ type Server struct {
 func NewServer(cfg Config) (*Server, error) {
 	if err := validateForwardAuthConfig(cfg); err != nil {
 		return nil, logging.Wrap("forward_auth_config", err)
+	}
+	if cfg.HomeOrigin != "" {
+		cfg.HomeOrigin, _ = publicOrigin(cfg.HomeOrigin)
 	}
 	proxies, err := parseTrustedProxies(cfg.TrustedProxies)
 	if err != nil {

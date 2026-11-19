@@ -57,6 +57,7 @@ For a public installation, use HTTPS and set:
 | `RP_ID` | `auth.example.com`, the passkey relying-party hostname |
 | `POSTGRES_URI` | PostgreSQL connection URI, or use `POSTGRES_URI_FROM` for broker discovery |
 | `REDIS_URI` | Redis connection URI, or use `REDIS_URI_FROM` for broker discovery |
+| `HOME_ORIGIN` | Optional default destination after direct sign-in; must be an allowed forward-auth app origin |
 | `FORWARD_AUTH_ORIGINS` | Allowed app origins, e.g. `https://app.example.com` or `https://*.example.com` (subdomains only; exact scheme/port) |
 
 Configure Caddy to check every app path through `/forward_auth` (or
@@ -92,3 +93,9 @@ normal system CA trust remains enabled. Discovery refuses redirects, limits
 responses to 4096 bytes, uses five bounded attempts with five-second deadlines,
 and emits diagnostics without URLs, tokens, response bodies or raw HTTP errors.
 Authentication failures never retry without the configured credential.
+
+With `HOME_ORIGIN=https://home.<domain>`, direct passkey sign-in, bootstrap,
+invitation enrollment followed by sign-in, and one-time link login redirect to
+Home. Pending app SSO flows still return to their requested app. The gateway's
+root remains the account-management page when already signed in; Home links to
+its devices and sessions sections. Empty HOME_ORIGIN retains standalone behavior.

@@ -89,6 +89,15 @@ func (p appOriginPattern) matches(origin string) bool {
 }
 
 func validateForwardAuthConfig(cfg Config) error {
+	if cfg.HomeOrigin != "" {
+		home, err := publicOrigin(cfg.HomeOrigin)
+		if err != nil {
+			return fmt.Errorf("home origin: %w", err)
+		}
+		if !(&Server{cfg: cfg}).allowedAppOrigin(home) {
+			return errors.New("HOME_ORIGIN must be an allowed forward-auth app origin")
+		}
+	}
 	if len(cfg.ForwardAuthOrigins) == 0 {
 		return nil
 	}

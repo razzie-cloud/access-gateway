@@ -115,6 +115,7 @@ async function passkeyCeremony(mode, body, credentialID) {
 
 // A canceled sign-in retries login without reusing a consumed enrollment link.
 const pendingSignIns = new WeakMap();
+const loginDestination = document.querySelector('meta[name="login-destination"]')?.content || "";
 document.addEventListener("submit", async (event) => {
   const form = event.target.closest("form[data-webauthn]");
   if (!form) return;
@@ -132,7 +133,7 @@ document.addEventListener("submit", async (event) => {
       if (details.newUser) throw new Error("Create your first passkey to set up your account.");
       await api("/api/login/link", { linkToken: tokenInput.value });
       tokenInput.value = "";
-      location.replace("/");
+      location.replace(loginDestination || "/");
       return;
     }
     if (!window.PublicKeyCredential) throw new Error("Passkeys require a supported browser and HTTPS (or localhost).");
@@ -158,9 +159,9 @@ document.addEventListener("submit", async (event) => {
       location.reload();
       return;
     }
-    if (tokenInput) {
-      tokenInput.value = "";
-      location.replace("/");
+    if (loginDestination || tokenInput) {
+      if (tokenInput) tokenInput.value = "";
+      location.replace(loginDestination || "/");
       return;
     }
     status("Signed in.");
