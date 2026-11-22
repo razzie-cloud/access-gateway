@@ -8,10 +8,14 @@ import (
 
 	"github.com/razzie-cloud/access-gateway/internal/app"
 	"github.com/razzie-cloud/access-gateway/internal/config"
+	"github.com/razzie-cloud/access-gateway/internal/healthcheck"
 	"github.com/razzie-cloud/access-gateway/internal/logging"
 )
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "healthcheck" {
+		os.Exit(healthcheck.Run())
+	}
 	if err := logging.Setup("access-gateway"); err != nil {
 		slog.Error(err.Error(), "event", "config.invalid", "field", "LOG_LEVEL")
 		os.Exit(1)
