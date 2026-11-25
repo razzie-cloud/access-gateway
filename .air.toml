@@ -1,0 +1,21 @@
+root = "."
+tmp_dir = "/tmp/air"
+env_files = []
+
+[build]
+cmd = "go build -buildvcs=false -o /tmp/air/app ./cmd/access-gateway"
+entrypoint = ["/tmp/air/app"]
+# Embedded assets and data need recompilation too, regardless of extension.
+include_ext = ["*"]
+exclude_dir = [".git", ".local", "tmp", "vendor", "docs", "tests", "testdata", "data", "secrets", "puzzles", "licenses"]
+exclude_regex = ["_test\\.go$"]
+delay = 300
+# Polling also works with Docker Desktop and WSL bind mounts.
+poll = true
+poll_interval = 500
+stop_on_error = true
+send_interrupt = true
+kill_delay = "25s"
+
+[misc]
+clean_on_exit = true

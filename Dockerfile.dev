@@ -1,0 +1,14 @@
+FROM golang:1.27-alpine AS air
+RUN GOBIN=/usr/local/bin go install github.com/air-verse/air@v1.67.4
+
+FROM golang:1.27-alpine
+COPY --from=air /usr/local/bin/air /usr/local/bin/air
+ENV CGO_ENABLED=0 GOCACHE=/tmp/go-build
+WORKDIR /src
+RUN mkdir -p /tmp/air /tmp/go-build /go/pkg/mod
+COPY go.mod go.sum .air.toml ./
+RUN go mod download
+EXPOSE 8080
+HEALTHCHECK --interval=2s --timeout=3s --start-period=180s --retries=30 \
+  CMD ["/tmp/air/app", "healthcheck"]
+ENTRYPOINT ["air", "-c", ".air.toml"]
